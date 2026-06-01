@@ -1,0 +1,37 @@
+{{> header}}
+  <tr><td class="pad-x" style="padding:40px 40px 8px 40px;"><div class="eyebrow">{{backup_failed_eyebrow}}</div></td></tr>
+  <tr><td class="pad-x" style="padding:14px 40px 16px 40px;"><h1 class="editorial">{{backup_failed_headline}}</h1></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 28px 40px;"><p class="body">{{backup_failed_body}}</p></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 0 40px;"><div class="hairline-strong"></div></td></tr>
+  <tr><td class="pad-x" style="padding:32px 40px 4px 40px;"><div class="eyebrow">{{backup_failed_details_eyebrow}}</div></td></tr>
+  <tr><td class="pad-x" style="padding:12px 40px 16px 40px;"><h2 class="section-title">{{backup_failed_details_title}}</h2></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 28px 40px;">
+    <table role="presentation" class="data" cellpadding="0" cellspacing="0" border="0">
+      <tr><th style="width:36%;">{{th_field}}</th><th>{{th_value}}</th></tr>
+      <tr><td class="field-label">{{backup_failed_field_instance}}</td><td>{{hostname}}</td></tr>
+      <tr><td class="field-label">{{backup_failed_field_backup_id}}</td><td>{{backupId}}</td></tr>
+      <tr><td class="field-label">{{backup_failed_field_scheduled_at}}</td><td>{{scheduledAt}}</td></tr>
+      <tr><td class="field-label">{{backup_failed_field_failed_at}}</td><td>{{failedAt}}</td></tr>
+      <tr><td class="field-label">{{backup_failed_field_reason}}</td><td style="color:#B83232;">{{reason}}</td></tr>
+      <tr><td class="field-label">{{backup_failed_field_last_successful}}</td><td>{{lastSuccessful}}</td></tr>
+    </table>
+  </td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 28px 40px;">
+    <div class="warn-soft">
+      <p class="body" style="font-size:13px;font-weight:500;margin-bottom:4px;">{{backup_failed_alert_title}}</p>
+      <p class="muted" style="font-size:12px;">{{backup_failed_alert_body}}</p>
+    </div>
+  </td></tr>
+  <tr><td class="pad-x" align="left" style="padding:0 40px 36px 40px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td align="center" style="background:#0D1F4E;border-radius:8px;">
+        <a class="btn" href="{{frontendUrl}}/dashboard/backups" target="_blank">{{backup_failed_cta}}</a>
+      </td>
+    </tr></table>
+  </td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 0 40px;"><div class="hairline-strong"></div></td></tr>
+  <tr><td class="pad-x" style="padding:32px 40px 32px 40px;">
+    <p class="body" style="margin-bottom:14px;">{{backup_failed_closing}}</p>
+    <p class="body" style="font-weight:500;">{{team_sign}}</p>
+  </td></tr>
+{{> footer}}

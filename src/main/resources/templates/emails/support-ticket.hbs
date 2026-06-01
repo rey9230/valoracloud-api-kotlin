@@ -1,0 +1,36 @@
+{{> header}}
+  <tr><td class="pad-x" style="padding:40px 40px 8px 40px;"><div class="eyebrow">{{ticket_eyebrow}}</div></td></tr>
+  <tr><td class="pad-x" style="padding:14px 40px 16px 40px;"><h1 class="editorial">{{ticket_headline}} {{firstName}}</h1></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 28px 40px;"><p class="body">{{ticket_body}}</p></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 0 40px;"><div class="hairline-strong"></div></td></tr>
+  <tr><td class="pad-x" style="padding:32px 40px 4px 40px;"><div class="eyebrow">{{ticket_details_eyebrow}}</div></td></tr>
+  <tr><td class="pad-x" style="padding:12px 40px 16px 40px;"><h2 class="section-title">{{ticket_details_title}}</h2></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 28px 40px;">
+    <table role="presentation" class="data" cellpadding="0" cellspacing="0" border="0">
+      <tr><th style="width:36%;">{{th_field}}</th><th>{{th_value}}</th></tr>
+      <tr><td class="field-label">{{ticket_field_id}}</td><td class="mono-val">{{ticketId}}</td></tr>
+      <tr><td class="field-label">{{ticket_field_subject}}</td><td>{{ticketSubject}}</td></tr>
+      <tr><td class="field-label">{{ticket_field_priority}}</td><td>{{priority}}</td></tr>
+      <tr><td class="field-label">{{ticket_field_opened_at}}</td><td>{{openedAt}}</td></tr>
+      <tr><td class="field-label">{{ticket_field_first_reply}}</td><td>{{firstReplyExpected}}</td></tr>
+    </table>
+  </td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 4px 40px;"><div class="eyebrow">{{ticket_message_eyebrow}}</div></td></tr>
+  <tr><td class="pad-x" style="padding:12px 40px 28px 40px;">
+    <div class="info-soft">
+      <p class="body" style="font-size:13px;color:#374151;white-space:pre-line;">{{message}}</p>
+    </div>
+  </td></tr>
+  <tr><td class="pad-x" align="left" style="padding:0 40px 36px 40px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td align="center" style="background:#0D1F4E;border-radius:8px;">
+        <a class="btn" href="{{frontendUrl}}/dashboard/support/{{ticketId}}" target="_blank">{{ticket_cta}}</a>
+      </td>
+    </tr></table>
+  </td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 0 40px;"><div class="hairline-strong"></div></td></tr>
+  <tr><td class="pad-x" style="padding:32px 40px 32px 40px;">
+    <p class="body" style="margin-bottom:14px;">{{ticket_closing}}</p>
+    <p class="body" style="font-weight:500;">{{team_sign}}</p>
+  </td></tr>
+{{> footer}}

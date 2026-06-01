@@ -1,0 +1,56 @@
+{{> header}}
+  <tr><td class="pad-x" style="padding:40px 40px 8px 40px;"><div class="eyebrow">{{incident_eyebrow}}</div></td></tr>
+  <tr><td class="pad-x" style="padding:14px 40px 16px 40px;"><h1 class="editorial">{{incident_headline}}</h1></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 28px 40px;"><p class="body">{{incident_body}}</p></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 0 40px;"><div class="hairline-strong"></div></td></tr>
+  <tr><td class="pad-x" style="padding:32px 40px 4px 40px;"><div class="eyebrow">{{incident_status_eyebrow}}</div></td></tr>
+  <tr><td class="pad-x" style="padding:12px 40px 16px 40px;"><h2 class="section-title">{{incident_status_title}}</h2></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 28px 40px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr><td class="timeline-step">
+        <span class="dot dot-active"></span>
+        <span class="mono-val" style="font-size:11px;color:#B83232;font-weight:500;">{{startedAt}} &middot; {{incident_status_title}}</span><br/>
+        <span class="body" style="margin-left:18px;display:inline-block;margin-top:4px;">{{incident_update}}</span>
+      </td></tr>
+      <tr><td class="timeline-step">
+        <span class="dot dot-future"></span>
+        <span class="mono-val" style="font-size:11px;color:#6B7280;">{{incident_phase_identified}}</span><br/>
+        <span class="muted" style="margin-left:18px;display:inline-block;margin-top:4px;font-size:12px;">{{incident_phase_identified_body}}</span>
+      </td></tr>
+      <tr><td class="timeline-step">
+        <span class="dot dot-future"></span>
+        <span class="mono-val" style="font-size:11px;color:#6B7280;">{{incident_phase_monitoring}}</span><br/>
+        <span class="muted" style="margin-left:18px;display:inline-block;margin-top:4px;font-size:12px;">{{incident_phase_monitoring_body}}</span>
+      </td></tr>
+      <tr><td class="timeline-step">
+        <span class="dot dot-future"></span>
+        <span class="mono-val" style="font-size:11px;color:#6B7280;">{{incident_phase_resolved}}</span><br/>
+        <span class="muted" style="margin-left:18px;display:inline-block;margin-top:4px;font-size:12px;">{{incident_phase_resolved_body}}</span>
+      </td></tr>
+    </table>
+  </td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 0 40px;"><div class="hairline-strong"></div></td></tr>
+  <tr><td class="pad-x" style="padding:32px 40px 4px 40px;"><div class="eyebrow">{{incident_scope_eyebrow}}</div></td></tr>
+  <tr><td class="pad-x" style="padding:12px 40px 16px 40px;"><h2 class="section-title">{{incident_scope_title}}</h2></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 28px 40px;">
+    <table role="presentation" class="data" cellpadding="0" cellspacing="0" border="0">
+      <tr><th style="width:36%;">{{th_field}}</th><th>{{th_value}}</th></tr>
+      <tr><td class="field-label">{{incident_field_region}}</td><td>{{region}}</td></tr>
+      <tr><td class="field-label">{{incident_field_started}}</td><td>{{startedAt}}</td></tr>
+      <tr><td class="field-label">{{incident_field_services}}</td><td>{{services}}</td></tr>
+      <tr><td class="field-label">{{incident_field_reference}}</td><td>{{reference}}</td></tr>
+    </table>
+  </td></tr>
+  <tr><td class="pad-x" align="left" style="padding:0 40px 36px 40px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td align="center" style="background:#0D1F4E;border-radius:8px;">
+        <a class="btn" href="https://status.{{brandDomain}}/incidents/{{reference}}" target="_blank">{{incident_cta}}</a>
+      </td>
+    </tr></table>
+  </td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 0 40px;"><div class="hairline-strong"></div></td></tr>
+  <tr><td class="pad-x" style="padding:32px 40px 32px 40px;">
+    <p class="body" style="margin-bottom:14px;">{{incident_closing}}</p>
+    <p class="body" style="font-weight:500;">{{team_sign}}</p>
+  </td></tr>
+{{> footer}}

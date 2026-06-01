@@ -1,0 +1,26 @@
+{{> header}}
+  <tr><td class="pad-x" style="padding:40px 40px 8px 40px;"><div class="eyebrow">{{payment_confirmed_eyebrow}}</div></td></tr>
+  <tr><td class="pad-x" style="padding:14px 40px 16px 40px;"><h1 class="editorial">{{payment_confirmed_headline}}</h1></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 32px 40px;"><p class="body">{{payment_confirmed_body}}</p></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 0 40px;"><div class="hairline-strong"></div></td></tr>
+  <tr><td class="pad-x" style="padding:32px 40px 4px 40px;"><div class="eyebrow">{{payment_confirmed_details_eyebrow}}</div></td></tr>
+  <tr><td class="pad-x" style="padding:12px 40px 16px 40px;"><h2 class="section-title">{{payment_confirmed_details_title}}</h2></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 28px 40px;">
+    <table role="presentation" class="data" cellpadding="0" cellspacing="0" border="0">
+      <tr><th style="width:36%;">{{th_field}}</th><th>{{th_value}}</th></tr>
+      <tr><td class="field-label">{{payment_confirmed_field_order_id}}</td><td>{{orderId}}</td></tr>
+      <tr><td class="field-label">{{payment_confirmed_field_amount}}</td><td>$ {{amount}}</td></tr>
+    </table>
+  </td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 0 40px;"><div class="hairline-strong"></div></td></tr>
+  <tr><td class="pad-x" style="padding:32px 40px 4px 40px;"><div class="eyebrow">{{payment_confirmed_next_eyebrow}}</div></td></tr>
+  <tr><td class="pad-x" style="padding:12px 40px 16px 40px;"><h2 class="section-title">{{payment_confirmed_next_title}}</h2></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 28px 40px;"><p class="body">{{payment_confirmed_next_body}}</p></td></tr>
+  <tr><td class="pad-x" align="left" style="padding:0 40px 36px 40px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td align="center" style="background:#0D1F4E;border-radius:8px;">
+        <a class="btn" href="{{frontendUrl}}/dashboard" target="_blank">{{payment_confirmed_cta}}</a>
+      </td>
+    </tr></table>
+  </td></tr>
+{{> footer}}

@@ -1,0 +1,84 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="{{language}}">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="x-apple-disable-message-reformatting"/>
+<meta name="color-scheme" content="light"/>
+<meta name="supported-color-schemes" content="light"/>
+<title>{{subject}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<!--[if mso]>
+<style type="text/css">
+  body, table, td, p, a, h1, h2 { font-family: Arial, sans-serif !important; }
+</style>
+<![endif]-->
+<style type="text/css">
+  body, table, td, p, a { -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }
+  table, td { mso-table-lspace:0pt; mso-table-rspace:0pt; border-collapse:collapse; }
+  img { -ms-interpolation-mode:bicubic; border:0; outline:none; text-decoration:none; }
+  body { margin:0; padding:0; width:100% !important; background:#f0eee9; }
+  a { color:#0D1F4E; text-decoration:underline; text-underline-offset:2px; }
+  a:hover { color:#B83232; }
+  .wrap { background:#f0eee9; padding:48px 16px; }
+  .card { background:#FFFFFF; max-width:560px; width:100%; margin:0 auto; border:1px solid #E4E4E8; }
+  .pad-x { padding-left:40px; padding-right:40px; }
+  .hairline { border-top:1px solid #F0F0F2; height:1px; line-height:1px; font-size:0; }
+  .hairline-strong { border-top:1px solid #E4E4E8; height:1px; line-height:1px; font-size:0; }
+  h1.editorial { font-family:"IBM Plex Sans", Arial, sans-serif; font-weight:600; font-size:32px; line-height:1.15; letter-spacing:-0.025em; color:#0D1F4E; margin:0; }
+  h2.section-title { font-family:"IBM Plex Sans", Arial, sans-serif; font-weight:600; font-size:18px; line-height:1.3; letter-spacing:-0.01em; color:#0D1F4E; margin:0; }
+  .eyebrow { font-family:"IBM Plex Sans", Arial, sans-serif; font-weight:500; font-size:11px; line-height:1; letter-spacing:0.14em; text-transform:uppercase; color:#B83232; }
+  .eyebrow-mute { font-family:"IBM Plex Sans", Arial, sans-serif; font-weight:500; font-size:11px; line-height:1; letter-spacing:0.14em; text-transform:uppercase; color:#6B7280; }
+  p.body { font-family:"IBM Plex Sans", Arial, sans-serif; font-weight:400; font-size:15px; line-height:1.65; color:#0D1F4E; margin:0; }
+  p.muted { font-family:"IBM Plex Sans", Arial, sans-serif; font-weight:400; font-size:13px; line-height:1.6; color:#6B7280; margin:0; }
+  .mono-meta { font-family:"JetBrains Mono", monospace; font-size:11px; line-height:1.5; letter-spacing:0.04em; color:#6B7280; text-transform:uppercase; }
+  .mono-val { font-family:"JetBrains Mono", monospace; font-size:13px; line-height:1.5; letter-spacing:0; color:#0D1F4E; }
+  .mono-label { font-family:"JetBrains Mono", monospace; font-size:10px; line-height:1; letter-spacing:0.14em; color:#6B7280; text-transform:uppercase; }
+  .wm-v { font-family:"IBM Plex Sans", Arial, sans-serif; font-weight:600; font-size:22px; color:#0D1F4E; letter-spacing:-0.01em; }
+  .wm-c { font-family:"JetBrains Mono", monospace; font-weight:500; font-size:10px; color:#B83232; letter-spacing:0.14em; text-transform:uppercase; }
+  table.data { width:100%; border-collapse:collapse; }
+  table.data th { font-family:"IBM Plex Sans", Arial, sans-serif; font-weight:500; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:#6B7280; text-align:left; padding:10px 12px; border-bottom:1px solid #E4E4E8; background:#F7F7F8; }
+  table.data td { font-family:"JetBrains Mono", monospace; font-size:12.5px; line-height:1.5; color:#0D1F4E; padding:14px 12px; border-bottom:1px solid #F0F0F2; vertical-align:top; }
+  table.data tr:last-child td { border-bottom:none; }
+  td.field-label { font-family:"IBM Plex Sans", Arial, sans-serif !important; font-size:11px !important; color:#6B7280 !important; text-transform:uppercase; letter-spacing:0.10em; font-weight:500; }
+  a.btn { display:inline-block; background:#0D1F4E; color:#FFFFFF !important; font-family:"IBM Plex Sans", Arial, sans-serif; font-weight:500; font-size:14px; letter-spacing:0; text-decoration:none; padding:12px 22px; border-radius:8px; line-height:1; }
+  a.btn:hover { background:#162A6A; }
+  a.btn-danger { display:inline-block; background:#B83232; color:#FFFFFF !important; font-family:"IBM Plex Sans", Arial, sans-serif; font-weight:500; font-size:14px; letter-spacing:0; text-decoration:none; padding:12px 22px; border-radius:8px; line-height:1; }
+  .terminal { background:#0A1840; border-radius:8px; padding:16px 18px; font-family:"JetBrains Mono", monospace; font-size:12.5px; line-height:1.7; color:#D7E0F5; }
+  .term-prompt { color:#7AA2FF; }
+  .term-mute { color:#8490B6; }
+  .term-ok { color:#86EFAC; }
+  .term-str { color:#F9C57A; }
+  .alert-soft { background:#FEF0F0; border:1px solid #F5D9D9; border-left:3px solid #B83232; padding:14px 16px; border-radius:6px; }
+  .info-soft { background:#F7F7F8; border:1px solid #E4E4E8; border-left:3px solid #0D1F4E; padding:14px 16px; border-radius:6px; }
+  .warn-soft { background:#FFFBEB; border:1px solid #FDE68A; border-left:3px solid #92400E; padding:14px 16px; border-radius:6px; }
+  .ok-soft { background:#F0FDF4; border:1px solid #BBF7D0; border-left:3px solid #16A34A; padding:14px 16px; border-radius:6px; }
+  .footer-text { font-family:"JetBrains Mono", monospace; font-size:10px; line-height:1.7; color:#6B7280; letter-spacing:0.04em; }
+  .footer-text a { color:#6B7280; }
+  .timeline-step { padding:14px 0; border-bottom:1px solid #F0F0F2; }
+  .timeline-step:last-child { border-bottom:none; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:4px; vertical-align:middle; margin-right:10px; }
+  .dot-active { background:#B83232; }
+  .dot-future { background:#E4E4E8; }
+  .dot-ok { background:#16A34A; }
+  @media only screen and (max-width:520px){
+    .pad-x { padding-left:24px !important; padding-right:24px !important; }
+    h1.editorial { font-size:26px !important; }
+    .wrap { padding:24px 0 !important; }
+    table.data td, table.data th { padding:10px 10px !important; font-size:11.5px !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background:#f0eee9;">
+<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:#f0eee9;">{{preheader}}</div>
+<table role="presentation" class="wrap" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center">
+<table role="presentation" class="card" width="560" cellpadding="0" cellspacing="0" border="0" style="background:#FFFFFF;border:1px solid #E4E4E8;max-width:560px;">
+  <tr><td class="pad-x" style="padding:32px 40px 24px 40px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td align="left" valign="middle"><span class="wm-v">Valora</span>&nbsp;<span class="wm-c">CLOUD</span></td>
+      <td align="right" valign="middle" class="mono-label">{{headerLabel}}</td>
+    </tr></table>
+  </td></tr>
+  <tr><td class="pad-x"><div class="hairline-strong"></div></td></tr>

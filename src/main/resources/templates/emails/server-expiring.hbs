@@ -1,0 +1,20 @@
+{{> header}}
+  <tr><td class="pad-x" style="padding:40px 40px 8px 40px;"><div class="eyebrow">{{server_expiring_eyebrow}}</div></td></tr>
+  <tr><td class="pad-x" style="padding:14px 40px 16px 40px;"><h1 class="editorial">{{server_expiring_headline}}</h1></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 28px 40px;"><p class="body">{{server_expiring_body}}</p></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 0 40px;"><div class="hairline-strong"></div></td></tr>
+  <tr><td class="pad-x" style="padding:32px 40px 16px 40px;">
+    <table role="presentation" class="data" cellpadding="0" cellspacing="0" border="0">
+      <tr><th style="width:36%;">{{th_field}}</th><th>{{th_value}}</th></tr>
+      <tr><td class="field-label">{{server_expiring_field_hostname}}</td><td>{{hostname}}</td></tr>
+      <tr><td class="field-label">{{server_expiring_field_expires}}</td><td>{{expiresAt}}</td></tr>
+    </table>
+  </td></tr>
+  <tr><td class="pad-x" align="left" style="padding:0 40px 36px 40px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td align="center" style="background:#B83232;border-radius:8px;">
+        <a class="btn-danger" href="{{frontendUrl}}/dashboard/servers" target="_blank">{{server_expiring_cta}}</a>
+      </td>
+    </tr></table>
+  </td></tr>
+{{> footer}}

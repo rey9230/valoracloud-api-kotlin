@@ -1,0 +1,23 @@
+{{> header}}
+  <tr><td class="pad-x" style="padding:40px 40px 8px 40px;"><div class="eyebrow">{{service_suspended_eyebrow}}</div></td></tr>
+  <tr><td class="pad-x" style="padding:14px 40px 16px 40px;"><h1 class="editorial">{{service_suspended_headline}}</h1></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 28px 40px;"><p class="body">{{service_suspended_body}}</p></td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 28px 40px;">
+    <div class="alert-soft">
+      <p class="body" style="font-size:13px;font-weight:500;margin-bottom:4px;">{{service_suspended_alert_title}}</p>
+      <p class="muted" style="font-size:12px;">{{service_suspended_alert_body}} <span class="mono-val">{{deleteDate}}</span>.</p>
+    </div>
+  </td></tr>
+  <tr><td class="pad-x" align="left" style="padding:0 40px 36px 40px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td align="center" style="background:#B83232;border-radius:8px;">
+        <a class="btn-danger" href="{{frontendUrl}}/dashboard/billing" target="_blank">{{service_suspended_cta}}</a>
+      </td>
+    </tr></table>
+  </td></tr>
+  <tr><td class="pad-x" style="padding:0 40px 0 40px;"><div class="hairline-strong"></div></td></tr>
+  <tr><td class="pad-x" style="padding:32px 40px 32px 40px;">
+    <p class="body" style="margin-bottom:14px;">{{service_suspended_closing}}</p>
+    <p class="body" style="font-weight:500;">{{team_sign}}</p>
+  </td></tr>
+{{> footer}}
