@@ -1,5 +1,6 @@
 package com.valoracloud.api.privatenetworks
 
+import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 
 data class CreatePrivateNetworkDto(

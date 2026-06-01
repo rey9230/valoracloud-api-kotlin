@@ -64,7 +64,7 @@ dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.8")
 
     // Stripe
-    implementation("com.stripe:stripe-java:28.10.0")
+    implementation("com.stripe:stripe-java:32.1.0")
 
     // Redis client (for queue operations)
     implementation("io.lettuce:lettuce-core")
@@ -73,8 +73,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
 
     // Bucket4j (rate limiting)
-    implementation("com.bucket4j:bucket4j-core:8.12.0")
-    implementation("com.bucket4j:bucket4j-redis:8.12.0")
+    implementation("com.bucket4j:bucket4j-core:8.10.1")
+    implementation("com.bucket4j:bucket4j-redis:8.10.1")
 
     // SSH (node-ssh equivalent)
     implementation("com.github.mwiede:jsch:0.2.24")
@@ -107,6 +107,10 @@ dependencies {
     testImplementation("org.testcontainers:postgresql:1.20.6")
     testImplementation("org.testcontainers:junit-jupiter:1.20.6")
     testImplementation("com.ninja-squad:springmockk:4.0.2")
+}
+
+springBoot {
+    mainClass.set("com.valoracloud.api.ValoracloudApiApplicationKt")
 }
 
 tasks.withType<KotlinCompile> {

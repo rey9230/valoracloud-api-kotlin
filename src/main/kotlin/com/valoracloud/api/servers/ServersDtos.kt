@@ -1,5 +1,6 @@
 package com.valoracloud.api.servers
 
+import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 
 data class ChangePasswordDto(
