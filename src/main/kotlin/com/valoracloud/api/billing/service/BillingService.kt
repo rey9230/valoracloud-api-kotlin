@@ -191,7 +191,7 @@ class BillingService(
         val orderId = paymentIntent.metadata["orderId"] ?: return
 
         orderRepo
-                .findByStatus(OrderStatus.PENDING_PAYMENT.name)
+                .findByStatus(OrderStatus.PENDING_PAYMENT)
                 .filter { it.id == orderId }
                 .forEach {
                     it.status = OrderStatus.FAILED

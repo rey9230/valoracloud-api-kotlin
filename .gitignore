@@ -20,6 +20,8 @@ Thumbs.db
 .env
 .env.local
 .env.production
+src/main/resources/application-dev.properties
+src/main/resources/application-dev.yml
 
 # Logs
 *.log

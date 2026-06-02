@@ -10,7 +10,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 @RestController
-@RequestMapping("/api/billing")
+@RequestMapping("/billing")
 @Tag(name = "Billing")
 class BillingController(
     private val billingService: BillingService,

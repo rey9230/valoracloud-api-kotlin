@@ -13,10 +13,13 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
     open-in-view: false
     properties:
       hibernate:
+        globally_quoted_identifiers: true
         jdbc:
           time_zone: UTC
         format_sql: false

@@ -14,7 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 
 @RestController
-@RequestMapping("/api/invoices")
+@RequestMapping("/invoices")
 @Tag(name = "Invoices")
 @SecurityRequirement(name = "bearerAuth")
 class InvoicesController(

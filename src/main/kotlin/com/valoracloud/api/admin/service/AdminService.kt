@@ -1,5 +1,6 @@
 package com.valoracloud.api.admin.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.valoracloud.api.admin.dto.*
 import com.valoracloud.api.auth.security.JwtProvider
 import com.valoracloud.api.common.dto.PaginatedResponse
@@ -53,6 +54,7 @@ class AdminService(
         private val notifications: NotificationsService,
         @Value("\${app.encryption-key}") private val encryptionKey: String,
         @Value("\${BRAND_DOMAIN:valoracloud.com}") private val brandDomain: String,
+        private val mapper: ObjectMapper,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -897,8 +899,8 @@ class AdminService(
                             priceMonthly = dto.price1Month,
                             contaboPlanId = dto.contaboPlanId,
                             contaboCostPrice = dto.contaboCostPrice,
-                            regions = dto.regions ?: emptyList(),
-                            availableAddons = dto.availableAddons ?: emptyList(),
+                            regions = mapper.valueToTree(dto.regions ?: emptyList<String>()),
+                            availableAddons = mapper.valueToTree(dto.availableAddons ?: emptyList<String>()),
                             storageTB = dto.storageTB,
                             sortOrder = dto.sortOrder ?: 0,
                     )
@@ -931,8 +933,8 @@ class AdminService(
         dto.setup12Months?.let { plan.setup12Months = it }
         dto.contaboPlanId?.let { plan.contaboPlanId = it }
         dto.contaboCostPrice?.let { plan.contaboCostPrice = it }
-        dto.regions?.let { plan.regions = it }
-        dto.availableAddons?.let { plan.availableAddons = it }
+        dto.regions?.let { plan.regions = mapper.valueToTree(it) }
+        dto.availableAddons?.let { plan.availableAddons = mapper.valueToTree(it) }
         dto.storageTB?.let { plan.storageTB = it }
         return planRepo.save(plan)
     }

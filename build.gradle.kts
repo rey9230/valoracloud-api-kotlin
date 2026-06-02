@@ -49,7 +49,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
 
     // PostgreSQL
-    runtimeOnly("org.postgresql:postgresql")
+    implementation("org.postgresql:postgresql")
 
     // Flyway (migrations)
     implementation("org.flywaydb:flyway-core")

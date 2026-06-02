@@ -1,6 +1,7 @@
 package com.valoracloud.api.config
 
 import com.valoracloud.api.entity.*
+import com.valoracloud.api.common.model.*
 import java.time.Instant
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
@@ -37,7 +38,7 @@ interface PlanRepository : JpaRepository<Plan, String> {
 @Repository
 interface OrderRepository : JpaRepository<Order, String> {
     fun findByUserIdOrderByCreatedAtDesc(userId: String): List<Order>
-    fun findByStatus(status: String): List<Order>
+    fun findByStatus(status: OrderStatus): List<Order>
     fun findByStripePaymentId(stripePaymentId: String): Order?
     fun findByCryptoPaymentId(cryptoPaymentId: String): Order?
 }
@@ -49,7 +50,7 @@ interface ServerRepository : JpaRepository<Server, String> {
     fun findByUserIdAndId(userId: String, id: String): Server?
     fun findByContaboInstanceId(contaboInstanceId: String): Server?
     fun findByOrderId(orderId: String): Server?
-    fun findByStatusAndExpiresAtBefore(status: String, before: Instant): List<Server>
+    fun findByStatusAndExpiresAtBefore(status: ServerStatus, before: Instant): List<Server>
 }
 
 @Repository
