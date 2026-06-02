@@ -20,6 +20,9 @@ class AuthController(private val authService: AuthService) {
     @PostMapping("/login")
     fun login(@Valid @RequestBody dto: LoginDto): AuthResponse = authService.login(dto)
 
+    @PostMapping("/admin/login")
+    fun adminLogin(@Valid @RequestBody dto: LoginDto): AuthResponse = authService.adminLogin(dto)
+
     @PostMapping("/refresh")
     fun refresh(@Valid @RequestBody dto: RefreshDto): AuthResponse = authService.refresh(dto)
 

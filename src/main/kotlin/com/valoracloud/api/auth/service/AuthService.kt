@@ -48,6 +48,18 @@ class AuthService(
         return buildAuthResponse(user)
     }
 
+    fun adminLogin(dto: LoginDto): AuthResponse {
+        val user = userRepo.findByEmailAndDeletedAtIsNull(dto.email)
+            ?: throw UnauthorizedException("Invalid credentials")
+        if (user.role != Role.ADMIN)
+            throw UnauthorizedException("Invalid credentials")
+        if (user.status == UserStatus.SUSPENDED || user.status == UserStatus.BANNED)
+            throw ForbiddenException("Account ${user.status.name.lowercase()}")
+        if (!passwordEncoder.matches(dto.password, user.password))
+            throw UnauthorizedException("Invalid credentials")
+        return buildAuthResponse(user)
+    }
+
     fun refresh(dto: RefreshDto): AuthResponse {
         val stored = refreshTokenRepo.findByToken(dto.refreshToken)
             ?: throw UnauthorizedException("Invalid refresh token")
