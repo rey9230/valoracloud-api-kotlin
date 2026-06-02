@@ -81,18 +81,24 @@ class Plan(
         var bandwidth: Int = 1,
         var portSpeed: Int? = null,
         var snapshots: Int = 0,
-        @Column(precision = 10, scale = 2) var price1Month: BigDecimal = BigDecimal.ZERO,
-        @Column(precision = 10, scale = 2) var price6Months: BigDecimal = BigDecimal.ZERO,
-        @Column(precision = 10, scale = 2) var price12Months: BigDecimal = BigDecimal.ZERO,
-        @Column(precision = 10, scale = 2) var setup1Month: BigDecimal = BigDecimal.ZERO,
-        @Column(precision = 10, scale = 2) var setup6Months: BigDecimal = BigDecimal.ZERO,
-        @Column(precision = 10, scale = 2) var setup12Months: BigDecimal = BigDecimal.ZERO,
+        @Column(name = "price1_month", precision = 10, scale = 2)
+        var price1Month: BigDecimal = BigDecimal.ZERO,
+        @Column(name = "price6_months", precision = 10, scale = 2)
+        var price6Months: BigDecimal = BigDecimal.ZERO,
+        @Column(name = "price12_months", precision = 10, scale = 2)
+        var price12Months: BigDecimal = BigDecimal.ZERO,
+        @Column(name = "setup1_month", precision = 10, scale = 2)
+        var setup1Month: BigDecimal = BigDecimal.ZERO,
+        @Column(name = "setup6_months", precision = 10, scale = 2)
+        var setup6Months: BigDecimal = BigDecimal.ZERO,
+        @Column(name = "setup12_months", precision = 10, scale = 2)
+        var setup12Months: BigDecimal = BigDecimal.ZERO,
         @Column(precision = 10, scale = 2) var priceMonthly: BigDecimal = BigDecimal.ZERO,
         var contaboPlanId: String = "",
         @Column(precision = 10, scale = 2) var contaboCostPrice: BigDecimal? = null,
         @JdbcTypeCode(SqlTypes.JSON) var regions: List<String> = emptyList(),
         @JdbcTypeCode(SqlTypes.JSON) var availableAddons: List<String> = emptyList(),
-        var storageTB: Double? = null,
+        @Column(name = "storage_tb") var storageTB: Double? = null,
         var sortOrder: Int = 0,
         @Enumerated(EnumType.STRING) var status: PlanStatus = PlanStatus.ACTIVE,
 ) : BaseEntity()
