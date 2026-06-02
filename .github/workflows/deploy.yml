@@ -21,18 +21,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Build with Gradle (compile + test)
-        run: gradle bootJar --no-daemon -x test
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -41,7 +29,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -52,29 +40,18 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache,mode=max
 
-      - name: Set up SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${{ vars.VPS_HOST }}" >> ~/.ssh/known_hosts
-
       - name: Deploy on VPS
         uses: appleboy/ssh-action@v1
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           GHCR_USER: ${{ github.actor }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL || vars.DATABASE_URL }}
-          SPRING_DATASOURCE_URL: ${{ secrets.DATABASE_URL || vars.DATABASE_URL }}
-          REDIS_HOST: ${{ vars.REDIS_HOST }}
-          REDIS_PORT: ${{ vars.REDIS_PORT }}
+          SPRING_PROFILES_ACTIVE: production
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_HOST: ${{ secrets.REDIS_HOST }}
+          REDIS_PORT: ${{ secrets.REDIS_PORT }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-          REDIS_TLS: ${{ vars.REDIS_TLS }}
-          QUEUE_REDIS_HOST: ${{ secrets.QUEUE_REDIS_HOST }}
-          QUEUE_REDIS_PORT: ${{ secrets.QUEUE_REDIS_PORT }}
-          QUEUE_REDIS_PASSWORD: ${{ secrets.QUEUE_REDIS_PASSWORD }}
-          QUEUE_REDIS_TLS: ${{ secrets.QUEUE_REDIS_TLS }}
+          REDIS_TLS: ${{ secrets.REDIS_TLS }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           JWT_ACCESS_EXPIRY: ${{ secrets.JWT_ACCESS_EXPIRY }}
           JWT_REFRESH_EXPIRY: ${{ secrets.JWT_REFRESH_EXPIRY }}
@@ -85,66 +62,51 @@ jobs:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_ENABLED: ${{ secrets.STRIPE_ENABLED }}
-          SMTP_HOST: ${{ vars.SMTP_HOST }}
-          SMTP_PORT: ${{ vars.SMTP_PORT }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          SMTP_FROM: ${{ vars.SMTP_FROM }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
-          BRAND_NAME: ${{ vars.BRAND_NAME }}
-          BRAND_DOMAIN: ${{ vars.BRAND_DOMAIN }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          BRAND_NAME: ${{ secrets.BRAND_NAME }}
+          BRAND_DOMAIN: ${{ secrets.BRAND_DOMAIN }}
           WHOIS_PRIVACY_HANDLE_ID: ${{ secrets.WHOIS_PRIVACY_HANDLE_ID }}
           WHOIS_PRIVACY_PRICE: ${{ secrets.WHOIS_PRIVACY_PRICE }}
           SHKEEPER_ENABLED: ${{ secrets.SHKEEPER_ENABLED }}
-          SHKEEPER_BASE_URL: ${{ vars.SHKEEPER_BASE_URL }}
+          SHKEEPER_BASE_URL: ${{ secrets.SHKEEPER_BASE_URL }}
           SHKEEPER_API_KEY: ${{ secrets.SHKEEPER_API_KEY }}
-          APP_URL: ${{ vars.APP_URL }}
+          APP_URL: ${{ secrets.APP_URL }}
           FACEBOOK_PIXEL_ID: ${{ secrets.FACEBOOK_PIXEL_ID }}
           FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
-          FACEBOOK_TEST_EVENT_CODE: ${{ secrets.FACEBOOK_TEST_EVENT_CODE }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
-          SPRING_PROFILES_ACTIVE: production
           PROVISIONING_DRY_RUN: 'false'
         with:
-          host: ${{ vars.VPS_HOST }}
+          host: ${{ secrets.VPS_HOST }}
           port: 22
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: IMAGE,GHCR_TOKEN,GHCR_USER,DATABASE_URL,SPRING_DATASOURCE_URL,REDIS_HOST,REDIS_PORT,REDIS_PASSWORD,REDIS_TLS,QUEUE_REDIS_HOST,QUEUE_REDIS_PORT,QUEUE_REDIS_PASSWORD,QUEUE_REDIS_TLS,JWT_SECRET,JWT_ACCESS_EXPIRY,JWT_REFRESH_EXPIRY,CONTABO_CLIENT_ID,CONTABO_CLIENT_SECRET,CONTABO_API_USER,CONTABO_API_PASSWORD,STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET,STRIPE_ENABLED,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASS,SMTP_FROM,ENCRYPTION_KEY,FRONTEND_URL,BRAND_NAME,BRAND_DOMAIN,WHOIS_PRIVACY_HANDLE_ID,WHOIS_PRIVACY_PRICE,SHKEEPER_ENABLED,SHKEEPER_BASE_URL,SHKEEPER_API_KEY,APP_URL,FACEBOOK_PIXEL_ID,FACEBOOK_ACCESS_TOKEN,FACEBOOK_TEST_EVENT_CODE,TELEGRAM_BOT_TOKEN,UPSTASH_REDIS_REST_URL,UPSTASH_REDIS_REST_TOKEN,SPRING_PROFILES_ACTIVE,PROVISIONING_DRY_RUN
+          envs: IMAGE,GHCR_TOKEN,GHCR_USER,SPRING_PROFILES_ACTIVE,DATABASE_URL,REDIS_HOST,REDIS_PORT,REDIS_PASSWORD,REDIS_TLS,JWT_SECRET,JWT_ACCESS_EXPIRY,JWT_REFRESH_EXPIRY,CONTABO_CLIENT_ID,CONTABO_CLIENT_SECRET,CONTABO_API_USER,CONTABO_API_PASSWORD,STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET,STRIPE_ENABLED,SMTP_HOST,SMTP_PORT,SMTP_USER,SMTP_PASS,SMTP_FROM,ENCRYPTION_KEY,FRONTEND_URL,BRAND_NAME,BRAND_DOMAIN,WHOIS_PRIVACY_HANDLE_ID,WHOIS_PRIVACY_PRICE,SHKEEPER_ENABLED,SHKEEPER_BASE_URL,SHKEEPER_API_KEY,APP_URL,FACEBOOK_PIXEL_ID,FACEBOOK_ACCESS_TOKEN,TELEGRAM_BOT_TOKEN,UPSTASH_REDIS_REST_URL,UPSTASH_REDIS_REST_TOKEN,PROVISIONING_DRY_RUN
           script: |
-            if [ -z "$DATABASE_URL" ]; then
-              echo "DATABASE_URL is not configured. Add it as a GitHub Actions secret or repository variable."
-              exit 1
-            fi
-
-            # Login to GHCR and pull the latest image
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker pull "$IMAGE"
 
-            # Stop and remove previous container
             docker stop valoracloud-api || true
             docker rm valoracloud-api || true
 
-            # Start new container
-            # Flyway runs migrations automatically on Spring Boot startup
+            # Flyway migrations run automatically on Spring Boot startup
             docker run -d --name valoracloud-api \
               --restart unless-stopped \
               -p 8080:8080 \
               -e SPRING_PROFILES_ACTIVE="$SPRING_PROFILES_ACTIVE" \
               -e PORT=8080 \
               -e DATABASE_URL="$DATABASE_URL" \
-              -e SPRING_DATASOURCE_URL="$SPRING_DATASOURCE_URL" \
               -e REDIS_HOST="$REDIS_HOST" \
               -e REDIS_PORT="$REDIS_PORT" \
               -e REDIS_PASSWORD="$REDIS_PASSWORD" \
               -e REDIS_TLS="$REDIS_TLS" \
-              -e QUEUE_REDIS_HOST="$QUEUE_REDIS_HOST" \
-              -e QUEUE_REDIS_PORT="$QUEUE_REDIS_PORT" \
-              -e QUEUE_REDIS_PASSWORD="$QUEUE_REDIS_PASSWORD" \
-              -e QUEUE_REDIS_TLS="$QUEUE_REDIS_TLS" \
               -e JWT_SECRET="$JWT_SECRET" \
               -e JWT_ACCESS_EXPIRY="$JWT_ACCESS_EXPIRY" \
               -e JWT_REFRESH_EXPIRY="$JWT_REFRESH_EXPIRY" \
@@ -172,12 +134,10 @@ jobs:
               -e APP_URL="$APP_URL" \
               -e FACEBOOK_PIXEL_ID="$FACEBOOK_PIXEL_ID" \
               -e FACEBOOK_ACCESS_TOKEN="$FACEBOOK_ACCESS_TOKEN" \
-              -e FACEBOOK_TEST_EVENT_CODE="$FACEBOOK_TEST_EVENT_CODE" \
               -e TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" \
               -e UPSTASH_REDIS_REST_URL="$UPSTASH_REDIS_REST_URL" \
               -e UPSTASH_REDIS_REST_TOKEN="$UPSTASH_REDIS_REST_TOKEN" \
               -e PROVISIONING_DRY_RUN="$PROVISIONING_DRY_RUN" \
               "$IMAGE"
 
-            # Cleanup dangling images
             docker image prune -f
