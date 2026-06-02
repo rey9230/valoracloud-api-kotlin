@@ -57,7 +57,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -H "${{ vars.VPS_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Deploy on VPS
         uses: appleboy/ssh-action@v1
@@ -66,10 +66,10 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USER: ${{ github.actor }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          REDIS_HOST: ${{ secrets.REDIS_HOST }}
-          REDIS_PORT: ${{ secrets.REDIS_PORT }}
+          REDIS_HOST: ${{ vars.REDIS_HOST }}
+          REDIS_PORT: ${{ vars.REDIS_PORT }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-          REDIS_TLS: ${{ secrets.REDIS_TLS }}
+          REDIS_TLS: ${{ vars.REDIS_TLS }}
           QUEUE_REDIS_HOST: ${{ secrets.QUEUE_REDIS_HOST }}
           QUEUE_REDIS_PORT: ${{ secrets.QUEUE_REDIS_PORT }}
           QUEUE_REDIS_PASSWORD: ${{ secrets.QUEUE_REDIS_PASSWORD }}
@@ -84,21 +84,21 @@ jobs:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_ENABLED: ${{ secrets.STRIPE_ENABLED }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          SMTP_FROM: ${{ vars.SMTP_FROM }}
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
-          BRAND_NAME: ${{ secrets.BRAND_NAME }}
-          BRAND_DOMAIN: ${{ secrets.BRAND_DOMAIN }}
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+          BRAND_NAME: ${{ vars.BRAND_NAME }}
+          BRAND_DOMAIN: ${{ vars.BRAND_DOMAIN }}
           WHOIS_PRIVACY_HANDLE_ID: ${{ secrets.WHOIS_PRIVACY_HANDLE_ID }}
           WHOIS_PRIVACY_PRICE: ${{ secrets.WHOIS_PRIVACY_PRICE }}
           SHKEEPER_ENABLED: ${{ secrets.SHKEEPER_ENABLED }}
-          SHKEEPER_BASE_URL: ${{ secrets.SHKEEPER_BASE_URL }}
+          SHKEEPER_BASE_URL: ${{ vars.SHKEEPER_BASE_URL }}
           SHKEEPER_API_KEY: ${{ secrets.SHKEEPER_API_KEY }}
-          APP_URL: ${{ secrets.APP_URL }}
+          APP_URL: ${{ vars.APP_URL }}
           FACEBOOK_PIXEL_ID: ${{ secrets.FACEBOOK_PIXEL_ID }}
           FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
           FACEBOOK_TEST_EVENT_CODE: ${{ secrets.FACEBOOK_TEST_EVENT_CODE }}
@@ -108,7 +108,7 @@ jobs:
           SPRING_PROFILES_ACTIVE: production
           PROVISIONING_DRY_RUN: 'false'
         with:
-          host: ${{ secrets.VPS_HOST }}
+          host: ${{ vars.VPS_HOST }}
           port: 22
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}

@@ -1,0 +1,9 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Valora Cloud" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="valoracloud-api.main" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.valoracloud.api.ValoracloudApiApplication" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
