@@ -121,7 +121,7 @@ jobs:
               -e CONTABO_API_PASSWORD="$CONTABO_API_PASSWORD" \
               -e STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY" \
               -e STRIPE_WEBHOOK_SECRET="$STRIPE_WEBHOOK_SECRET" \
-              -e STRIPE_ENABLED="$STRIPE_ENABLED" \
+              -e STRIPE_ENABLED="${STRIPE_ENABLED:-true}" \
               -e SMTP_HOST="$SMTP_HOST" \
               -e SMTP_PORT="$SMTP_PORT" \
               -e SMTP_USER="$SMTP_USER" \
@@ -133,7 +133,7 @@ jobs:
               -e BRAND_DOMAIN="$BRAND_DOMAIN" \
               -e WHOIS_PRIVACY_HANDLE_ID="$WHOIS_PRIVACY_HANDLE_ID" \
               -e WHOIS_PRIVACY_PRICE="$WHOIS_PRIVACY_PRICE" \
-              -e SHKEEPER_ENABLED="$SHKEEPER_ENABLED" \
+              -e SHKEEPER_ENABLED="${SHKEEPER_ENABLED:-true}" \
               -e SHKEEPER_BASE_URL="$SHKEEPER_BASE_URL" \
               -e SHKEEPER_API_KEY="$SHKEEPER_API_KEY" \
               -e APP_URL="$APP_URL" \
