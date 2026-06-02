@@ -93,6 +93,11 @@ jobs:
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker pull "$IMAGE"
 
+            # Ensure DATABASE_URL is a JDBC URL (convert postgres:// or postgresql:// -> jdbc:postgresql://)
+            JDBC_URL=$(echo "$DATABASE_URL" | sed 's|^postgres://|jdbc:postgresql://|; s|^postgresql://|jdbc:postgresql://|')
+            # If already starts with jdbc:, keep as-is
+            echo "$DATABASE_URL" | grep -q "^jdbc:" && JDBC_URL="$DATABASE_URL"
+
             docker stop valoracloud-api || true
             docker rm valoracloud-api || true
 
@@ -102,7 +107,7 @@ jobs:
               -p 8080:8080 \
               -e SPRING_PROFILES_ACTIVE="$SPRING_PROFILES_ACTIVE" \
               -e PORT=8080 \
-              -e DATABASE_URL="$DATABASE_URL" \
+              -e DATABASE_URL="$JDBC_URL" \
               -e REDIS_HOST="$REDIS_HOST" \
               -e REDIS_PORT="$REDIS_PORT" \
               -e REDIS_PASSWORD="$REDIS_PASSWORD" \
