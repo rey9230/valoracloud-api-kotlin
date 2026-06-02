@@ -95,6 +95,9 @@ jobs:
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker pull "$IMAGE"
 
+            # Build JDBC URL with credentials as query parameters (official PostgreSQL JDBC approach)
+            FULL_DB_URL="${DATABASE_URL}&user=${DB_USERNAME}&password=${DB_PASSWORD}"
+
             docker stop valoracloud-api || true
             docker rm valoracloud-api || true
 
@@ -104,9 +107,7 @@ jobs:
               -p 8080:8080 \
               -e SPRING_PROFILES_ACTIVE="$SPRING_PROFILES_ACTIVE" \
               -e PORT=8080 \
-              -e DATABASE_URL="$DATABASE_URL" \
-              -e SPRING_DATASOURCE_USERNAME="$DB_USERNAME" \
-              -e SPRING_DATASOURCE_PASSWORD="$DB_PASSWORD" \
+              -e SPRING_DATASOURCE_URL="$FULL_DB_URL" \
               -e REDIS_HOST="$REDIS_HOST" \
               -e REDIS_PORT="$REDIS_PORT" \
               -e REDIS_PASSWORD="$REDIS_PASSWORD" \
