@@ -56,6 +56,13 @@ class BillingService(
             return mapOf("received" to true, "bypassed" to true)
         }
 
+        if (webhookSecret.isBlank()) {
+            log.error("Webhook received but STRIPE_WEBHOOK_SECRET is empty")
+            throw com.valoracloud.api.common.exceptions.BadRequestException(
+                    "Stripe webhook is not configured"
+            )
+        }
+
         // 1. Verify Stripe signature
         val event: Event =
                 try {
@@ -74,14 +81,16 @@ class BillingService(
             return mapOf("received" to true)
         }
 
-        // 3. Store event
-        webhookEventRepo.save(
-                WebhookEvent(
-                        stripeEventId = event.id,
-                        eventType = event.type,
-                        eventSource = "stripe",
-                )
-        )
+        // 3. Store event only once so Stripe retries don't hit unique-constraint errors.
+        val storedEvent =
+                existing
+                        ?: webhookEventRepo.save(
+                                WebhookEvent(
+                                        stripeEventId = event.id,
+                                        eventType = event.type,
+                                        eventSource = "stripe",
+                                )
+                        )
 
         // 4. Route event
         try {
@@ -94,11 +103,8 @@ class BillingService(
             }
 
             // Mark processed
-            val evt = webhookEventRepo.findByStripeEventId(event.id)
-            if (evt != null) {
-                evt.processed = true
-                webhookEventRepo.save(evt)
-            }
+            storedEvent.processed = true
+            webhookEventRepo.save(storedEvent)
         } catch (e: Exception) {
             log.error("Error processing event ${event.id}: ${e.message}", e)
             throw e
