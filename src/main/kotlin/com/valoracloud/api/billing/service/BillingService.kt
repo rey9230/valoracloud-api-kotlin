@@ -23,6 +23,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 class BillingService(
@@ -222,21 +224,35 @@ class BillingService(
             log.warn("⚠️ Facebook Purchase tracking failed: ${it.message}")
         }
 
-        // CRITICAL: Force flush to ensure order changes are committed before async dispatch
-        log.info("💾 Flushing entity manager to commit order changes...")
-        entityManager.flush()
-        entityManager.clear()
-        log.info("✅ Entity manager flushed - DB transaction will commit")
+        // CRITICAL FIX: Register provisioning to run AFTER transaction commits
+        // This is the ONLY way to guarantee the async thread sees committed data
+        log.info("🔒 Registering provisioning to execute AFTER transaction commit...")
 
-        // Dispatch provisioning (runs async in separate thread)
-        log.info("🚀 Dispatching provisioning for order ${order.id}...")
-        try {
-            dispatchProvisioning(order)
-            log.info("✅✅✅ Order ${order.id} FULLY PROCESSED - provisioning dispatched!")
-        } catch (e: Exception) {
-            log.error("❌ Provisioning dispatch failed: ${e.message}", e)
-            throw e
-        }
+        // Capture immutable data now (inside transaction) to pass to post-commit callback
+        val jobData = ProvisionJobData(
+            orderId = order.id,
+            planId = order.planId ?: "",
+            userId = order.userId,
+            region = order.region,
+            os = order.os,
+            hostname = order.hostname,
+        )
+
+        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+            override fun afterCommit() {
+                log.info("✅ Transaction committed! Now dispatching provisioning for order ${jobData.orderId}")
+                try {
+                    provisioningProcessor.provisionServer(jobData)
+                    log.info("✅✅✅ Order ${jobData.orderId} FULLY PROCESSED - provisioning dispatched AFTER commit!")
+                } catch (e: Exception) {
+                    log.error("❌ Provisioning dispatch failed after commit: ${e.message}", e)
+                    // Can't re-throw here, transaction already committed
+                    // Admin must manually trigger provisioning or Stripe will retry on next webhook
+                }
+            }
+        })
+
+        log.info("✅ Provisioning registered for post-commit execution")
     }
 
     private fun handlePaymentFailed(event: Event) {
@@ -355,30 +371,45 @@ class BillingService(
             webhookEventRepo.save(it)
         }
 
-        // 7. CRITICAL: Flush before async dispatch (same as Stripe webhook)
-        log.info("💾 Flushing entity manager for crypto webhook...")
-        entityManager.flush()
-        entityManager.clear()
-        log.info("✅ Entity manager flushed - crypto order changes committed")
+        // 7. CRITICAL: Register provisioning to run AFTER transaction commit (same as Stripe)
+        log.info("🔒 Registering crypto provisioning to execute AFTER transaction commit...")
 
-        // 8. Dispatch provisioning
-        log.info("🚀 Dispatching provisioning for crypto-paid order $orderId...")
-        dispatchProvisioning(order)
+        val jobData = ProvisionJobData(
+            orderId = order.id,
+            planId = order.planId ?: "",
+            userId = order.userId,
+            region = order.region,
+            os = order.os,
+            hostname = order.hostname,
+        )
 
-        // Track Facebook
-        val cryptoUser = userRepo.findById(order.userId).orElse(null)
-        runCatching {
-            facebookConversions.trackPurchase(
-                    PurchaseParams(
-                            orderId = order.id,
-                            value = order.totalAmount.toDouble(),
-                            currency = "USD",
-                            email = cryptoUser?.email
-                    )
-            )
-        }
+        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+            override fun afterCommit() {
+                log.info("✅ Crypto transaction committed! Now dispatching provisioning for order ${jobData.orderId}")
+                try {
+                    provisioningProcessor.provisionServer(jobData)
 
-        log.info("✅✅✅ Order $orderId crypto-paid, provisioning dispatched!")
+                    // Track Facebook
+                    runCatching {
+                        val cryptoUser = userRepo.findById(jobData.userId).orElse(null)
+                        facebookConversions.trackPurchase(
+                            PurchaseParams(
+                                orderId = jobData.orderId,
+                                value = order.totalAmount.toDouble(),
+                                currency = "USD",
+                                email = cryptoUser?.email
+                            )
+                        )
+                    }
+
+                    log.info("✅✅✅ Order ${jobData.orderId} crypto-paid, provisioning dispatched AFTER commit!")
+                } catch (e: Exception) {
+                    log.error("❌ Crypto provisioning dispatch failed after commit: ${e.message}", e)
+                }
+            }
+        })
+
+        log.info("✅ Crypto provisioning registered for post-commit execution")
         return mapOf("received" to true)
     }
 
