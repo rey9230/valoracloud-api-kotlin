@@ -37,6 +37,7 @@ class SecurityConfig(
                                     "/billing/crypto-webhook",
                                     "/actuator/health",
                                     "/billing/**", // Temporarily allow all billing routes for debugging
+                                    "/test/**", // Test endpoints (should be disabled in production)
                             )
                             .permitAll()
                     // GET endpoints are generally open for plans, etc.
