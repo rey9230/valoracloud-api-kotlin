@@ -169,24 +169,29 @@ class BillingService(
         )
         log.info("✅ Invoice created: ${invoice.id}")
 
-        // Notify user
+        // Notify user (async to avoid blocking webhook response)
         log.info("📧 Looking up user for notification...")
         val user = userRepo.findById(order.userId).orElse(null)
         if (user != null) {
-            log.info("📧 Sending payment confirmation email to: ${user.email}")
-            try {
-                notifications.sendPaymentConfirmationEmail(
-                        email = user.email,
-                        orderId = order.id,
-                        amount = order.totalAmount.toDouble(),
-                        language = user.language,
-                        userId = order.userId,
-                )
-                log.info("✅ Email sent successfully")
-            } catch (e: Exception) {
-                log.error("❌ Failed to send email: ${e.message}", e)
-                // Continue processing even if email fails
+            log.info("📧 Scheduling payment confirmation email to: ${user.email} (async)")
+
+            // Fire-and-forget email - runs in separate thread, won't block webhook
+            java.util.concurrent.CompletableFuture.runAsync {
+                try {
+                    log.info("📧 Sending email async to ${user.email}...")
+                    notifications.sendPaymentConfirmationEmail(
+                            email = user.email,
+                            orderId = order.id,
+                            amount = order.totalAmount.toDouble(),
+                            language = user.language,
+                            userId = order.userId,
+                    )
+                    log.info("✅ Email sent successfully to ${user.email}")
+                } catch (e: Exception) {
+                    log.warn("⚠️ Email sending failed (non-critical, provisioning continues): ${e.message}")
+                }
             }
+            log.info("✅ Email task scheduled, continuing with provisioning...")
         } else {
             log.warn("⚠️ User ${order.userId} not found - skipping email notification")
         }
