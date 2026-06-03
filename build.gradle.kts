@@ -72,6 +72,9 @@ dependencies {
     // Thymeleaf (email templates)
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
 
+    // Handlebars (email templates)
+    implementation("com.github.jknack:handlebars:4.4.0")
+
     // Bucket4j (rate limiting)
     implementation("com.bucket4j:bucket4j-core:8.10.1")
     implementation("com.bucket4j:bucket4j-redis:8.10.1")

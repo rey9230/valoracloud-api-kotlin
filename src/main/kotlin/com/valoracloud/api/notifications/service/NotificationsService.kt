@@ -243,17 +243,24 @@ class NotificationsService(
     ) {
         val locale = loadLocale(language)
         val subject = "${locale["object_storage_ready_subject"] ?: "Your Object Storage is Ready"} – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "STORAGE · PROVISIONED",
-            preheader = locale["object_storage_ready_preheader"] ?: "Your object storage bucket is ready.",
-            bodyLines = listOf(
-                detailRow("Name", displayName),
-                detailRow("Endpoint", "<code>$s3Endpoint</code>"),
-                detailRow("Access Key", "<code>$accessKey</code>"),
-                detailRow("Secret Key", "<code>$secretKey</code>"),
-                detailRow("Region", region),
+        val preheader = locale["object_storage_ready_preheader"] ?: "Your object storage bucket is ready."
+        val headerLabel = locale["object_storage_ready_eyebrow"] ?: "STORAGE · PROVISIONED"
+
+        val html = templateRenderer.render(
+            templateName = "object-storage-ready",
+            data = mapOf(
+                "displayName" to displayName,
+                "s3Endpoint" to s3Endpoint,
+                "accessKey" to accessKey,
+                "secretKey" to secretKey,
+                "region" to region
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel
         )
+
         sendEmail(email, subject, html, "object-storage-provisioned", language, userId)
     }
 
@@ -285,14 +292,21 @@ class NotificationsService(
     ) {
         val locale = loadLocale(language)
         val subject = "${locale["reinstall_complete_subject"] ?: "Reinstallation Complete"} – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "VPS · REINSTALLED",
-            preheader = locale["reinstall_complete_preheader"] ?: "Your server has been reinstalled.",
-            bodyLines = listOf(
-                detailRow("Server", hostname),
-                detailRow("New Password", "<code>$newPassword</code>"),
+        val preheader = locale["reinstall_complete_preheader"] ?: "Your server has been reinstalled."
+        val headerLabel = locale["reinstall_complete_eyebrow"] ?: "VPS · REINSTALLED"
+
+        val html = templateRenderer.render(
+            templateName = "reinstall-complete",
+            data = mapOf(
+                "hostname" to hostname,
+                "newPassword" to newPassword
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel
         )
+
         sendEmail(email, subject, html, "server-reinstalled", language, userId)
     }
 
@@ -303,19 +317,26 @@ class NotificationsService(
     ) {
         val locale = loadLocale(language)
         val subject = "${locale["ticket_subject"] ?: "Support Ticket Received"} [$ticketId] – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "TICKET · $ticketId",
-            preheader = locale["ticket_preheader"] ?: "Your support request has been received.",
-            bodyLines = listOf(
-                "<p style=\"font-size:16px;line-height:1.6\">Hi $firstName,</p>",
-                detailRow("Ticket ID", ticketId),
-                detailRow("Subject", ticketSubject),
-                detailRow("Priority", priority),
-                detailRow("Opened At", openedAt),
-                detailRow("First Reply Expected", firstReplyExpected),
-                "<p style=\"margin-top:16px;padding:16px;background:#f8f8f8;border-radius:8px;font-size:14px;line-height:1.6\">$message</p>",
+        val preheader = locale["ticket_preheader"] ?: "Your support request has been received."
+        val headerLabel = locale["ticket_eyebrow"] ?: "SUPPORT · TICKET"
+
+        val html = templateRenderer.render(
+            templateName = "support-ticket",
+            data = mapOf(
+                "firstName" to firstName,
+                "ticketId" to ticketId,
+                "ticketSubject" to ticketSubject,
+                "priority" to priority,
+                "openedAt" to openedAt,
+                "firstReplyExpected" to firstReplyExpected,
+                "message" to message
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel
         )
+
         sendEmail(email, subject, html, "support-ticket", language, userId)
     }
 
@@ -415,81 +436,36 @@ class NotificationsService(
         return locale
     }
 
-    private fun buildHtmlTemplate(
-        headerLabel: String,
-        preheader: String,
-        bodyLines: List<String>,
-    ): String {
-        val body = bodyLines.joinToString("\n")
-        return """
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f4f4f5;margin:0;padding:0">
-<table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;padding:32px 16px">
-  <tr><td style="background:#18181b;padding:32px;border-radius:12px 12px 0 0">
-    <table width="100%"><tr>
-      <td style="color:#a78bfa;font-size:11px;letter-spacing:2px;text-transform:uppercase">$headerLabel</td>
-      <td align="right" style="color:#71717a;font-size:13px">$brandName</td>
-    </tr></table>
-    <h1 style="color:#fafafa;font-size:20px;margin:24px 0 0;line-height:1.4">$preheader</h1>
-  </td></tr>
-  <tr><td style="background:#ffffff;padding:32px;border:1px solid #e4e4e7;border-top:0;border-radius:0 0 12px 12px">
-    $body
-  </td></tr>
-  <tr><td style="padding:24px 0;text-align:center;color:#a1a1aa;font-size:12px">
-    © ${java.time.Year.now()} $brandName · <a href="$frontendUrl" style="color:#6366f1;text-decoration:none">$brandDomain</a>
-  </td></tr>
-</table>
-<div style="display:none;max-height:0;overflow:hidden">$preheader</div>
-</body>
-</html>
-        """.trimIndent()
-    }
-
-    private fun detailRow(label: String, value: String): String =
-        """<p style="margin:4px 0;font-size:14px"><span style="color:#71717a">$label:</span> $value</p>"""
-
-    private fun securityDetails(
-        requestedAt: String, fromIp: String, location: String, device: String,
-    ): String {
-        if (requestedAt.isBlank() && fromIp.isBlank()) return ""
-        return """
-<div style="margin-top:24px;padding:16px;background:#f8f8f8;border-radius:8px">
-  <p style="font-size:12px;color:#71717a;text-transform:uppercase;margin:0 0 12px">Session Details</p>
-  ${if (requestedAt.isNotBlank()) detailRow("Time", requestedAt) else ""}
-  ${if (fromIp.isNotBlank()) detailRow("IP", fromIp) else ""}
-  ${if (location.isNotBlank()) detailRow("Location", location) else ""}
-  ${if (device.isNotBlank()) detailRow("Device", device) else ""}
-</div>
-        """.trimIndent()
-    }
-
     private fun interpolate(str: String, vars: Map<String, String>): String {
         val regex = Regex("\\{\\{(\\w+)\\}\\}")
         return regex.replace(str) { vars[it.groupValues[1]] ?: "" }
     }
 
     companion object {
+        // Basic fallback locales for backward compatibility
+        private val LOCALE_EN = mapOf(
+            "welcome_subject" to "Welcome to {{brandName}}",
+            "password_reset_subject" to "Password Reset",
+            "payment_confirmed_subject" to "Payment Confirmed",
+    companion object {
+        // Basic fallback locales for backward compatibility
         private val LOCALE_EN = mapOf(
             "welcome_subject" to "Welcome to {{brandName}}",
             "welcome_preheader" to "Verify your email to get started.",
-            "welcome_body" to "Click the button below to verify your email address and get started.",
             "password_reset_subject" to "Password Reset",
             "password_reset_preheader" to "Reset your password.",
-            "password_reset_body" to "Someone requested a password reset for your account. Click below to reset it.",
             "payment_confirmed_subject" to "Payment Confirmed",
             "payment_confirmed_preheader" to "Your payment has been received.",
             "server_ready_subject" to "Your Server is Ready",
             "server_ready_preheader" to "Your server is live and ready.",
             "server_expiring_subject" to "Server Expiring Soon",
-            "server_expiring_preheader" to "Your server is expiring soon. Renew to keep it running.",
+            "server_expiring_preheader" to "Your server is expiring soon.",
             "service_suspended_subject" to "Service Suspended",
             "service_suspended_preheader" to "Your service has been suspended.",
             "maintenance_subject" to "Scheduled Maintenance",
-            "maintenance_preheader" to "Scheduled maintenance is coming up for your region.",
+            "maintenance_preheader" to "Scheduled maintenance is coming up.",
             "incident_subject" to "Incident Notification",
-            "incident_preheader" to "We are investigating an incident affecting your region.",
+            "incident_preheader" to "We are investigating an incident.",
             "domain_registered_subject" to "Domain Registered",
             "domain_registered_preheader" to "Your domain has been successfully registered.",
             "new_login_subject" to "New Login Detected",
@@ -509,22 +485,20 @@ class NotificationsService(
         private val LOCALE_ES = mapOf(
             "welcome_subject" to "Bienvenido a {{brandName}}",
             "welcome_preheader" to "Verifica tu correo para comenzar.",
-            "welcome_body" to "Haz clic en el botón para verificar tu dirección de correo y empezar.",
             "password_reset_subject" to "Restablecer Contraseña",
             "password_reset_preheader" to "Restablece tu contraseña.",
-            "password_reset_body" to "Alguien solicitó restablecer la contraseña de tu cuenta. Haz clic para continuar.",
             "payment_confirmed_subject" to "Pago Confirmado",
             "payment_confirmed_preheader" to "Tu pago ha sido recibido.",
             "server_ready_subject" to "Tu Servidor Está Listo",
             "server_ready_preheader" to "Tu servidor está activo y listo.",
             "server_expiring_subject" to "Servidor Por Vencer",
-            "server_expiring_preheader" to "Tu servidor está por vencer. Renueva para mantenerlo activo.",
+            "server_expiring_preheader" to "Tu servidor está por vencer.",
             "service_suspended_subject" to "Servicio Suspendido",
             "service_suspended_preheader" to "Tu servicio ha sido suspendido.",
             "maintenance_subject" to "Mantenimiento Programado",
             "maintenance_preheader" to "Mantenimiento programado para tu región.",
             "incident_subject" to "Notificación de Incidente",
-            "incident_preheader" to "Estamos investigando un incidente que afecta tu región.",
+            "incident_preheader" to "Estamos investigando un incidente.",
             "domain_registered_subject" to "Dominio Registrado",
             "domain_registered_preheader" to "Tu dominio ha sido registrado exitosamente.",
             "new_login_subject" to "Nuevo Inicio de Sesión Detectado",
