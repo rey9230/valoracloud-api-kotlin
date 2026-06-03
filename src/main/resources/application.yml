@@ -130,9 +130,9 @@ upstash:
 # ─── Springdoc ───────────────────────────────────────────
 springdoc:
   api-docs:
-    path: /api/docs-json
+    path: /docs-json
   swagger-ui:
-    path: /api/docs
+    path: /docs
     operations-sorter: alpha
     tags-sorter: alpha
 
