@@ -17,6 +17,7 @@ import com.valoracloud.api.facebook.PurchaseParams
 import com.valoracloud.api.notifications.service.NotificationsService
 import com.valoracloud.api.shkeeper.SHKeeperCallback
 import com.valoracloud.api.shkeeper.SHKeeperService
+import jakarta.persistence.EntityManager
 import java.time.Instant
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -35,6 +36,7 @@ class BillingService(
         private val facebookConversions: FacebookConversionsService,
         private val provisioningProcessor:
                 com.valoracloud.api.provisioning.processor.ProvisioningProcessor,
+        private val entityManager: EntityManager,
         @Value("\${stripe.secret-key:}") stripeSecretKey: String,
         @Value("\${stripe.webhook-secret:}") private val webhookSecret: String,
         @Value("\${stripe.enabled:true}") private val stripeEnabled: Boolean,
@@ -197,10 +199,14 @@ class BillingService(
         }
 
         // Track Facebook events (fire-and-forget)
+        log.info("📊 Tracking Facebook conversions...")
         runCatching {
             facebookConversions.trackAddPaymentInfo(
                     AddPaymentInfoParams(orderId = order.id, email = user?.email)
             )
+            log.info("✅ Facebook AddPaymentInfo tracked")
+        }.onFailure {
+            log.warn("⚠️ Facebook AddPaymentInfo tracking failed: ${it.message}")
         }
         runCatching {
             facebookConversions.trackPurchase(
@@ -211,12 +217,26 @@ class BillingService(
                             email = user?.email
                     )
             )
+            log.info("✅ Facebook Purchase tracked")
+        }.onFailure {
+            log.warn("⚠️ Facebook Purchase tracking failed: ${it.message}")
         }
 
-        // Dispatch provisioning
-        dispatchProvisioning(order)
+        // CRITICAL: Force flush to ensure order changes are committed before async dispatch
+        log.info("💾 Flushing entity manager to commit order changes...")
+        entityManager.flush()
+        entityManager.clear()
+        log.info("✅ Entity manager flushed - DB transaction will commit")
 
-        log.info("Order ${order.id} paid, provisioning job dispatched")
+        // Dispatch provisioning (runs async in separate thread)
+        log.info("🚀 Dispatching provisioning for order ${order.id}...")
+        try {
+            dispatchProvisioning(order)
+            log.info("✅✅✅ Order ${order.id} FULLY PROCESSED - provisioning dispatched!")
+        } catch (e: Exception) {
+            log.error("❌ Provisioning dispatch failed: ${e.message}", e)
+            throw e
+        }
     }
 
     private fun handlePaymentFailed(event: Event) {
@@ -335,7 +355,14 @@ class BillingService(
             webhookEventRepo.save(it)
         }
 
-        // 7. Dispatch provisioning
+        // 7. CRITICAL: Flush before async dispatch (same as Stripe webhook)
+        log.info("💾 Flushing entity manager for crypto webhook...")
+        entityManager.flush()
+        entityManager.clear()
+        log.info("✅ Entity manager flushed - crypto order changes committed")
+
+        // 8. Dispatch provisioning
+        log.info("🚀 Dispatching provisioning for crypto-paid order $orderId...")
         dispatchProvisioning(order)
 
         // Track Facebook
@@ -351,7 +378,7 @@ class BillingService(
             )
         }
 
-        log.info("Order $orderId crypto-paid, provisioning dispatched")
+        log.info("✅✅✅ Order $orderId crypto-paid, provisioning dispatched!")
         return mapOf("received" to true)
     }
 
