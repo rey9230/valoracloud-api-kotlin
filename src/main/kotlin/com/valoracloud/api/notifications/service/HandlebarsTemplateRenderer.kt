@@ -20,7 +20,8 @@ class HandlebarsTemplateRenderer(
 ) {
     private val log = LoggerFactory.getLogger(HandlebarsTemplateRenderer::class.java)
     private val objectMapper = jacksonObjectMapper()
-    private val handlebars = Handlebars(ClassPathTemplateLoader("/templates/emails", ""))
+    private val handlebars = Handlebars(ClassPathTemplateLoader("/templates/emails", ".hbs"))
+
     private val messagesCache = mutableMapOf<String, Map<String, String>>()
 
     @PostConstruct
