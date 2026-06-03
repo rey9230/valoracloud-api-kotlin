@@ -3,9 +3,9 @@ package com.valoracloud.api.notifications.service
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.github.jknack.handlebars.Handlebars
-import com.github.jknack.handlebars.Template
 import com.github.jknack.handlebars.io.ClassPathTemplateLoader
 import org.slf4j.LoggerFactory
+
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.text.NumberFormat
@@ -25,28 +25,12 @@ class HandlebarsTemplateRenderer(
 
     @PostConstruct
     fun init() {
-        // Register partials from classpath
-        try {
-            val headerPartial = javaClass.getResourceAsStream("/templates/emails/partials/header.hbs")
-                ?.bufferedReader()?.use { it.readText() }
-                ?: throw IllegalStateException("Header partial not found")
-
-            val footerPartial = javaClass.getResourceAsStream("/templates/emails/partials/footer.hbs")
-                ?.bufferedReader()?.use { it.readText() }
-                ?: throw IllegalStateException("Footer partial not found")
-
-            handlebars.registerPartial("header", headerPartial)
-            handlebars.registerPartial("footer", footerPartial)
-            log.info("✅ Handlebars partials registered (header, footer)")
-        } catch (e: Exception) {
-            log.error("❌ Failed to register Handlebars partials: ${e.message}", e)
-        }
-
-        // Preload messages
+        // Preload messages for all supported locales
         loadMessages("en")
         loadMessages("es")
         log.info("✅ Handlebars template renderer initialized with ${messagesCache.size} locales")
     }
+
 
     /**
      * Render a template with context data and localization.
