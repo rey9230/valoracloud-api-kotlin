@@ -59,9 +59,9 @@ spring:
             enable: ${SMTP_SSL:false}
           socketFactory:
             port: ${SMTP_PORT:587}
-            class: ${SMTP_SOCKET_FACTORY:javax.net.ssl.SSLSocketFactory}
             fallback: false
         debug: ${MAIL_DEBUG:false}
+
 
   jackson:
     serialization:

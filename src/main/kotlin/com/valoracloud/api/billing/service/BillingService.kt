@@ -173,38 +173,22 @@ class BillingService(
         )
         log.info("✅ Invoice created: ${invoice.id}")
 
-        // Notify user (async to avoid blocking webhook response)
+        // Look up user for notification (capture data inside transaction)
         log.info("📧 Looking up user for notification...")
         val user = userRepo.findById(order.userId).orElse(null)
-        if (user != null) {
-            log.info("📧 Scheduling payment confirmation email to: ${user.email} (async)")
-
-            // Fire-and-forget email - runs in separate thread, won't block webhook
-            java.util.concurrent.CompletableFuture.runAsync {
-                try {
-                    log.info("📧 Sending email async to ${user.email}...")
-                    notifications.sendPaymentConfirmationEmail(
-                            email = user.email,
-                            orderId = order.id,
-                            amount = order.totalAmount.toDouble(),
-                            language = user.language,
-                            userId = order.userId,
-                    )
-                    log.info("✅ Email sent successfully to ${user.email}")
-                } catch (e: Exception) {
-                    log.warn("⚠️ Email sending failed (non-critical, provisioning continues): ${e.message}")
-                }
-            }
-            log.info("✅ Email task scheduled, continuing with provisioning...")
+        val userEmail = user?.email
+        val userLanguage = user?.language ?: "en"
+        if (userEmail != null) {
+            log.info("📧 Will send payment confirmation email to: $userEmail (after commit)")
         } else {
             log.warn("⚠️ User ${order.userId} not found - skipping email notification")
         }
 
-        // Track Facebook events (fire-and-forget)
+        // Track Facebook events (fire-and-forget, non-critical)
         log.info("📊 Tracking Facebook conversions...")
         runCatching {
             facebookConversions.trackAddPaymentInfo(
-                    AddPaymentInfoParams(orderId = order.id, email = user?.email)
+                    AddPaymentInfoParams(orderId = order.id, email = userEmail)
             )
             log.info("✅ Facebook AddPaymentInfo tracked")
         }.onFailure {
@@ -216,7 +200,7 @@ class BillingService(
                             orderId = order.id,
                             value = order.totalAmount.toDouble(),
                             currency = "USD",
-                            email = user?.email
+                            email = userEmail
                     )
             )
             log.info("✅ Facebook Purchase tracked")
@@ -224,9 +208,9 @@ class BillingService(
             log.warn("⚠️ Facebook Purchase tracking failed: ${it.message}")
         }
 
-        // CRITICAL FIX: Register provisioning to run AFTER transaction commits
-        // This is the ONLY way to guarantee the async thread sees committed data
-        log.info("🔒 Registering provisioning to execute AFTER transaction commit...")
+        // CRITICAL: Register email + provisioning to run AFTER transaction commits
+        // This guarantees the async thread sees committed data
+        log.info("🔒 Registering post-commit tasks (email + provisioning)...")
 
         // Capture immutable data now (inside transaction) to pass to post-commit callback
         val jobData = ProvisionJobData(
@@ -238,21 +222,52 @@ class BillingService(
             hostname = order.hostname,
         )
 
+        // Capture email data for post-commit
+        val emailData = if (userEmail != null) {
+            EmailNotificationData(
+                email = userEmail,
+                orderId = order.id,
+                amount = order.totalAmount.toDouble(),
+                language = userLanguage,
+                userId = order.userId,
+            )
+        } else null
+
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
             override fun afterCommit() {
-                log.info("✅ Transaction committed! Now dispatching provisioning for order ${jobData.orderId}")
+                log.info("✅ Transaction committed! Now dispatching post-commit tasks for order ${jobData.orderId}")
+
+                // 1. Send payment confirmation email (async, non-blocking)
+                if (emailData != null) {
+                    java.util.concurrent.CompletableFuture.runAsync {
+                        try {
+                            log.info("📧 Sending payment confirmation email to ${emailData.email}...")
+                            notifications.sendPaymentConfirmationEmail(
+                                email = emailData.email,
+                                orderId = emailData.orderId,
+                                amount = emailData.amount,
+                                language = emailData.language,
+                                userId = emailData.userId,
+                            )
+                            log.info("✅ Payment confirmation email sent to ${emailData.email}")
+                        } catch (e: Exception) {
+                            log.error("❌ Payment confirmation email failed to ${emailData.email}: ${e.message}", e)
+                        }
+                    }
+                }
+
+                // 2. Dispatch provisioning
                 try {
                     provisioningProcessor.provisionServer(jobData)
                     log.info("✅✅✅ Order ${jobData.orderId} FULLY PROCESSED - provisioning dispatched AFTER commit!")
                 } catch (e: Exception) {
                     log.error("❌ Provisioning dispatch failed after commit: ${e.message}", e)
-                    // Can't re-throw here, transaction already committed
-                    // Admin must manually trigger provisioning or Stripe will retry on next webhook
                 }
             }
         })
 
-        log.info("✅ Provisioning registered for post-commit execution")
+        log.info("✅ Post-commit tasks registered (email + provisioning)")
+
     }
 
     private fun handlePaymentFailed(event: Event) {
@@ -371,8 +386,20 @@ class BillingService(
             webhookEventRepo.save(it)
         }
 
-        // 7. CRITICAL: Register provisioning to run AFTER transaction commit (same as Stripe)
-        log.info("🔒 Registering crypto provisioning to execute AFTER transaction commit...")
+        // Look up user for email notification (capture data inside transaction)
+        val cryptoUser = userRepo.findById(order.userId).orElse(null)
+        val cryptoEmailData = if (cryptoUser != null) {
+            EmailNotificationData(
+                email = cryptoUser.email,
+                orderId = order.id,
+                amount = order.totalAmount.toDouble(),
+                language = cryptoUser.language,
+                userId = order.userId,
+            )
+        } else null
+
+        // 7. CRITICAL: Register email + provisioning to run AFTER transaction commit (same as Stripe)
+        log.info("🔒 Registering crypto post-commit tasks (email + provisioning)...")
 
         val jobData = ProvisionJobData(
             orderId = order.id,
@@ -385,19 +412,40 @@ class BillingService(
 
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
             override fun afterCommit() {
-                log.info("✅ Crypto transaction committed! Now dispatching provisioning for order ${jobData.orderId}")
+                log.info("✅ Crypto transaction committed! Now dispatching post-commit tasks for order ${jobData.orderId}")
+
+                // 1. Send payment confirmation email (async, non-blocking)
+                if (cryptoEmailData != null) {
+                    java.util.concurrent.CompletableFuture.runAsync {
+                        try {
+                            log.info("📧 Sending crypto payment confirmation email to ${cryptoEmailData.email}...")
+                            notifications.sendPaymentConfirmationEmail(
+                                email = cryptoEmailData.email,
+                                orderId = cryptoEmailData.orderId,
+                                amount = cryptoEmailData.amount,
+                                language = cryptoEmailData.language,
+                                userId = cryptoEmailData.userId,
+                            )
+                            log.info("✅ Crypto payment confirmation email sent to ${cryptoEmailData.email}")
+                        } catch (e: Exception) {
+                            log.error("❌ Crypto payment confirmation email failed to ${cryptoEmailData.email}: ${e.message}", e)
+                        }
+                    }
+                }
+
+                // 2. Dispatch provisioning
                 try {
                     provisioningProcessor.provisionServer(jobData)
 
                     // Track Facebook
                     runCatching {
-                        val cryptoUser = userRepo.findById(jobData.userId).orElse(null)
+                        val fbUser = userRepo.findById(jobData.userId).orElse(null)
                         facebookConversions.trackPurchase(
                             PurchaseParams(
                                 orderId = jobData.orderId,
                                 value = order.totalAmount.toDouble(),
                                 currency = "USD",
-                                email = cryptoUser?.email
+                                email = fbUser?.email
                             )
                         )
                     }
@@ -409,7 +457,8 @@ class BillingService(
             }
         })
 
-        log.info("✅ Crypto provisioning registered for post-commit execution")
+        log.info("✅ Crypto post-commit tasks registered (email + provisioning)")
+
         return mapOf("received" to true)
     }
 
@@ -449,3 +498,12 @@ data class ProvisionJobData(
         val os: String,
         val hostname: String?,
 )
+
+data class EmailNotificationData(
+        val email: String,
+        val orderId: String,
+        val amount: Double,
+        val language: String,
+        val userId: String,
+)
+

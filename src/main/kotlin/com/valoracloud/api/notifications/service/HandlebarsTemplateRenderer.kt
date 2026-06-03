@@ -35,8 +35,8 @@ class HandlebarsTemplateRenderer(
                 ?.bufferedReader()?.use { it.readText() }
                 ?: throw IllegalStateException("Footer partial not found")
 
-            handlebars.registerPartial("header", handlebars.compileInline(headerPartial))
-            handlebars.registerPartial("footer", handlebars.compileInline(footerPartial))
+            handlebars.registerPartial("header", headerPartial)
+            handlebars.registerPartial("footer", footerPartial)
             log.info("✅ Handlebars partials registered (header, footer)")
         } catch (e: Exception) {
             log.error("❌ Failed to register Handlebars partials: ${e.message}", e)
