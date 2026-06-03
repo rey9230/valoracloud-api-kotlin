@@ -9,13 +9,14 @@ import com.valoracloud.api.contabo.ContaboService
 import com.valoracloud.api.entity.Server
 import com.valoracloud.api.notifications.service.NotificationsService
 import com.valoracloud.api.provisioning.service.ProvisioningService
+import com.valoracloud.api.provisioning.service.ProvisioningTxHelper
 import java.security.SecureRandom
 import java.time.Instant
 import java.util.Base64
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
 
 /**
  * Synchronous provisioning processor. Replaces the BullMQ-based worker from the NestJS version.
@@ -36,6 +37,7 @@ class ProvisioningProcessor(
         private val contabo: ContaboService,
         private val notifications: NotificationsService,
         private val provisioningService: ProvisioningService,
+        private val txHelper: ProvisioningTxHelper,
         private val serverMonitorRepo: ServerMonitorRepository,
         private val domainTldPricingRepo: DomainTldPricingRepository,
         @Value("\${app.encryption-key:}") private val encryptionKey: String,
@@ -81,37 +83,26 @@ runcmd: []
 
     // ─── Entry point ────────────────────────────────────
 
-    @Transactional
+    /**
+     * Runs asynchronously in the provisioningExecutor thread pool so the
+     * webhook handler (Stripe / SHKeeper) can return HTTP 200 immediately.
+     * NOT @Transactional — provisioning takes 15-25 min; holding a DB
+     * connection that long would exhaust the HikariCP pool.
+     */
+    @Async("provisioningExecutor")
     fun provisionServer(data: ProvisionJobData) {
         val orderId = data.orderId
 
         try {
             log.info("Starting provisioning for order $orderId")
 
-            // Get order to determine service type
-            val order =
-                    orderRepo.findById(orderId).orElse(null)
-                            ?: throw RuntimeException("Order $orderId not found")
-
-            if (order.status in
-                            setOf(
-                                    OrderStatus.CANCELLED,
-                                    OrderStatus.FAILED,
-                                    OrderStatus.PROVISIONING,
-                                    OrderStatus.ACTIVE,
-                            )
-            ) {
-                log.warn("Order $orderId is ${order.status}, skipping provisioning")
+            // Atomic claim: verify still PAID and transition → PROVISIONING
+            // (uses a separate @Transactional bean so the proxy applies)
+            val order = txHelper.claimOrder(orderId)
+            if (order == null) {
+                log.warn("Order $orderId could not be claimed (not found, not PAID, or already in progress)")
                 return
             }
-
-            // Atomic claim: PAID → PROVISIONING
-            if (order.status != OrderStatus.PAID) {
-                log.warn("Order $orderId already claimed by another job, skipping")
-                return
-            }
-            order.status = OrderStatus.PROVISIONING
-            orderRepo.save(order)
 
             // Route to appropriate provisioning logic
             when (order.serviceType) {
@@ -130,8 +121,8 @@ runcmd: []
     }
 
     // ─── Compute Provisioning ───────────────────────────
-
-    @Transactional
+    // NOT @Transactional — long-running (Contabo poll + SSH).
+    // Each serverRepo.save() / orderRepo.save() opens its own short transaction via Spring Data JPA.
     fun provisionCompute(data: ProvisionJobData) {
         val orderId = data.orderId
         val planId = data.planId
@@ -399,7 +390,6 @@ runcmd: []
 
     // ─── Object Storage Provisioning ────────────────────
 
-    @Transactional
     fun provisionObjectStorage(data: ProvisionJobData) {
         val orderId = data.orderId
         val userId = data.userId
@@ -477,7 +467,6 @@ runcmd: []
 
     // ─── Domain Provisioning ────────────────────────────
 
-    @Transactional
     fun provisionDomain(data: ProvisionJobData) {
         val orderId = data.orderId
         val userId = data.userId
