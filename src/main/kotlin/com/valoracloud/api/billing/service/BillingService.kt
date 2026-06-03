@@ -136,22 +136,27 @@ class BillingService(
 
         val order = orderRepo.findById(orderId).orElse(null)
         if (order == null) {
-            log.warn("Order $orderId not found")
+            log.error("❌ Order $orderId not found in database!")
             return
         }
+
+        log.info("📋 Order found - Current status: ${order.status}, User: ${order.userId}")
 
         // Allow recovery: SUCCEEDED payment can reactivate FAILED order
         if (order.status !in listOf(OrderStatus.PENDING_PAYMENT, OrderStatus.FAILED)) {
-            log.warn("Order $orderId already in status ${order.status}, skipping")
+            log.warn("⚠️ Order $orderId already in status ${order.status}, skipping payment processing")
             return
         }
 
+        log.info("💾 Updating order status to PAID...")
         // Update order to PAID
         order.status = OrderStatus.PAID
         orderRepo.save(order)
+        log.info("✅ Order status updated to PAID")
 
+        log.info("🧾 Creating invoice...")
         // Create invoice
-        invoiceRepo.save(
+        val invoice = invoiceRepo.save(
                 Invoice(
                         userId = order.userId,
                         orderId = order.id,
@@ -162,17 +167,28 @@ class BillingService(
                         paidAt = Instant.now(),
                 )
         )
+        log.info("✅ Invoice created: ${invoice.id}")
 
         // Notify user
+        log.info("📧 Looking up user for notification...")
         val user = userRepo.findById(order.userId).orElse(null)
         if (user != null) {
-            notifications.sendPaymentConfirmationEmail(
-                    email = user.email,
-                    orderId = order.id,
-                    amount = order.totalAmount.toDouble(),
-                    language = user.language,
-                    userId = order.userId,
-            )
+            log.info("📧 Sending payment confirmation email to: ${user.email}")
+            try {
+                notifications.sendPaymentConfirmationEmail(
+                        email = user.email,
+                        orderId = order.id,
+                        amount = order.totalAmount.toDouble(),
+                        language = user.language,
+                        userId = order.userId,
+                )
+                log.info("✅ Email sent successfully")
+            } catch (e: Exception) {
+                log.error("❌ Failed to send email: ${e.message}", e)
+                // Continue processing even if email fails
+            }
+        } else {
+            log.warn("⚠️ User ${order.userId} not found - skipping email notification")
         }
 
         // Track Facebook events (fire-and-forget)
@@ -337,6 +353,9 @@ class BillingService(
     // ─── Helpers ────────────────────────────────────────
 
     private fun dispatchProvisioning(order: Order) {
+        log.info("🔧 Creating provisioning job for order ${order.id}")
+        log.info("   Plan: ${order.planId}, Region: ${order.region}, OS: ${order.os}")
+
         try {
             provisioningProcessor.provisionServer(
                     ProvisionJobData(
@@ -348,9 +367,10 @@ class BillingService(
                             hostname = order.hostname,
                     )
             )
+            log.info("✅ Provisioning processor called successfully")
         } catch (e: Exception) {
             log.error(
-                    "Queue dispatch blocked for paid order ${order.id}. Stripe/SHKeeper will retry.",
+                    "❌❌❌ Provisioning dispatch FAILED for order ${order.id}. Stripe will retry. Error: ${e.message}",
                     e
             )
             throw e
