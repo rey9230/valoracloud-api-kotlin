@@ -14,6 +14,7 @@ import java.time.Instant
 class NotificationsService(
     private val mailSender: JavaMailSender,
     private val emailLogRepo: EmailLogRepository,
+    private val templateRenderer: HandlebarsTemplateRenderer,
     @Value("\${SMTP_FROM:support@valoracloud.com}") private val from: String,
     @Value("\${BRAND_NAME:Valora Cloud}") private val brandName: String,
     @Value("\${BRAND_DOMAIN:valoracloud.com}") private val brandDomain: String,
@@ -31,13 +32,19 @@ class NotificationsService(
         val verifyUrl = "$frontendUrl/verify-email?token=$token"
         val locale = loadLocale(language)
         val subject = interpolate(locale["welcome_subject"] ?: "Welcome to $brandName", mapOf("brandName" to brandName))
-        val html = buildHtmlTemplate(
-            headerLabel = "ACCOUNT · VERIFY",
-            preheader = locale["welcome_preheader"] ?: "Verify your email to get started.",
-            bodyLines = listOf(
-                "<p style=\"font-size:16px;line-height:1.6\">${locale["welcome_body"] ?: "Click the button below to verify your email address."}</p>",
-                "<a href=\"$verifyUrl\" style=\"display:inline-block;padding:12px 24px;background:#6366f1;color:#fff;text-decoration:none;border-radius:6px;font-weight:600\">Verify Email</a>",
+        val preheader = locale["welcome_preheader"] ?: "Verify your email to get started."
+        val headerLabel = locale["welcome_eyebrow"] ?: "ACCOUNT · VERIFY"
+
+        val html = templateRenderer.render(
+            templateName = "welcome",
+            data = mapOf(
+                "verifyUrl" to verifyUrl,
+                "token" to token,
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel,
         )
         sendEmail(email, subject, html, "email-verification", language, null)
     }
@@ -49,14 +56,24 @@ class NotificationsService(
         val resetUrl = "$frontendUrl/reset-password?token=$token"
         val locale = loadLocale(language)
         val subject = "${locale["password_reset_subject"] ?: "Password Reset"} – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "SECURITY · RESET",
-            preheader = locale["password_reset_preheader"] ?: "Reset your password.",
-            bodyLines = listOf(
-                "<p style=\"font-size:16px;line-height:1.6\">${locale["password_reset_body"] ?: "Click the button to reset your password."}</p>",
-                "<a href=\"$resetUrl\" style=\"display:inline-block;padding:12px 24px;background:#6366f1;color:#fff;text-decoration:none;border-radius:6px;font-weight:600\">Reset Password</a>",
-                securityDetails(requestedAt, fromIp, location, device),
+        val preheader = locale["password_reset_preheader"] ?: "Reset your password."
+        val headerLabel = locale["password_reset_eyebrow"] ?: "SECURITY · RESET"
+
+        val html = templateRenderer.render(
+            templateName = "password-reset",
+            data = mapOf(
+                "resetUrl" to resetUrl,
+                "token" to token,
+                "to" to email,
+                "requestedAt" to requestedAt,
+                "fromIp" to fromIp,
+                "location" to location,
+                "device" to device,
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel,
         )
         sendEmail(email, subject, html, "password-reset", language)
     }
@@ -65,13 +82,19 @@ class NotificationsService(
                                      language: String = "en", userId: String? = null) {
         val locale = loadLocale(language)
         val subject = "${locale["payment_confirmed_subject"] ?: "Payment Confirmed"} – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "BILLING · RECEIPT",
-            preheader = locale["payment_confirmed_preheader"] ?: "Your payment has been received.",
-            bodyLines = listOf(
-                "<p style=\"font-size:16px;line-height:1.6\">Payment received for order <strong>$orderId</strong></p>",
-                "<p style=\"font-size:24px;font-weight:700;color:#10b981\">€${"%.2f".format(amount)}</p>",
+        val preheader = locale["payment_confirmed_preheader"] ?: "Your payment has been received."
+        val headerLabel = locale["payment_confirmed_eyebrow"] ?: "BILLING · RECEIPT"
+
+        val html = templateRenderer.render(
+            templateName = "payment-confirmed",
+            data = mapOf(
+                "orderId" to orderId,
+                "amount" to String.format("%.2f", amount),
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel,
         )
         sendEmail(email, subject, html, "payment-confirmed", language, userId)
     }
@@ -80,14 +103,20 @@ class NotificationsService(
                              language: String = "en", userId: String? = null) {
         val locale = loadLocale(language)
         val subject = "${locale["server_ready_subject"] ?: "Your Server is Ready"} – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "VPS · PROVISIONED",
-            preheader = locale["server_ready_preheader"] ?: "Your server is live and ready.",
-            bodyLines = listOf(
-                detailRow("IP Address", "<code>$ipAddress</code>"),
-                detailRow("Username", username),
-                detailRow("Hostname", hostname),
+        val preheader = locale["server_ready_preheader"] ?: "Your server is live and ready."
+        val headerLabel = locale["server_ready_eyebrow"] ?: "VPS · PROVISIONED"
+
+        val html = templateRenderer.render(
+            templateName = "server-ready",
+            data = mapOf(
+                "ipAddress" to ipAddress,
+                "username" to username,
+                "hostname" to hostname,
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel,
         )
         sendEmail(email, subject, html, "server-provisioned", language, userId)
     }
@@ -96,12 +125,19 @@ class NotificationsService(
                                    language: String = "en", userId: String? = null) {
         val locale = loadLocale(language)
         val subject = "${locale["server_expiring_subject"] ?: "Server Expiring Soon"} – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "VPS · EXPIRING",
-            preheader = locale["server_expiring_preheader"] ?: "Your server is expiring soon.",
-            bodyLines = listOf(
-                "<p style=\"font-size:16px;line-height:1.6\">Server <strong>$hostname</strong> expires on <strong>$expiresAt</strong></p>",
+        val preheader = locale["server_expiring_preheader"] ?: "Your server is expiring soon."
+        val headerLabel = locale["server_expiring_eyebrow"] ?: "VPS · EXPIRING"
+
+        val html = templateRenderer.render(
+            templateName = "server-expiring",
+            data = mapOf(
+                "hostname" to hostname,
+                "expiresAt" to expiresAt,
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel,
         )
         sendEmail(email, subject, html, "server-expiration-warning", language, userId)
     }
@@ -110,12 +146,19 @@ class NotificationsService(
                                   language: String = "en", userId: String? = null) {
         val locale = loadLocale(language)
         val subject = "${locale["service_suspended_subject"] ?: "Service Suspended"} – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "SERVICE · SUSPENDED",
-            preheader = locale["service_suspended_preheader"] ?: "Your service has been suspended.",
-            bodyLines = listOf(
-                "<p style=\"font-size:16px;line-height:1.6\">Server <strong>$hostname</strong> has been suspended. Data will be deleted on <strong>$deleteDate</strong>.</p>",
+        val preheader = locale["service_suspended_preheader"] ?: "Your service has been suspended."
+        val headerLabel = locale["service_suspended_eyebrow"] ?: "SERVICE · SUSPENDED"
+
+        val html = templateRenderer.render(
+            templateName = "service-suspended",
+            data = mapOf(
+                "hostname" to hostname,
+                "deleteDate" to deleteDate,
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel,
         )
         sendEmail(email, subject, html, "service-suspended", language, userId)
     }
@@ -127,18 +170,24 @@ class NotificationsService(
     ) {
         val locale = loadLocale(language)
         val subject = "${locale["maintenance_subject"] ?: "Scheduled Maintenance"} – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "NOTICE · SCHEDULED",
-            preheader = locale["maintenance_preheader"] ?: "Scheduled maintenance is coming up.",
-            bodyLines = listOf(
-                "<p style=\"font-size:16px;line-height:1.6\">Scheduled maintenance in region <strong>$region</strong></p>",
-                detailRow("Window", window),
-                detailRow("Local Time", localTime),
-                detailRow("Duration", duration),
-                detailRow("Impact", impact),
-                detailRow("Reference", reference),
-                if (hostname.isNotBlank()) detailRow("Server", hostname) else "",
+        val preheader = locale["maintenance_preheader"] ?: "Scheduled maintenance is coming up."
+        val headerLabel = locale["maintenance_eyebrow"] ?: "NOTICE · SCHEDULED"
+
+        val html = templateRenderer.render(
+            templateName = "scheduled-maintenance",
+            data = mapOf(
+                "region" to region,
+                "window" to window,
+                "localTime" to localTime,
+                "duration" to duration,
+                "impact" to impact,
+                "reference" to reference,
+                "hostname" to hostname,
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel,
         )
         sendEmail(email, subject, html, "scheduled-maintenance", language, userId)
     }
@@ -149,15 +198,21 @@ class NotificationsService(
     ) {
         val locale = loadLocale(language)
         val subject = "${locale["incident_subject"] ?: "Incident Notification"} – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "INCIDENT · INVESTIGATING",
-            preheader = locale["incident_preheader"] ?: "We are investigating an incident.",
-            bodyLines = listOf(
-                "<p style=\"font-size:16px;line-height:1.6\">Incident in region <strong>$region</strong></p>",
-                detailRow("Started At", startedAt),
-                detailRow("Services", services),
-                detailRow("Reference", reference),
+        val preheader = locale["incident_preheader"] ?: "We are investigating an incident."
+        val headerLabel = locale["incident_eyebrow"] ?: "INCIDENT · INVESTIGATING"
+
+        val html = templateRenderer.render(
+            templateName = "incident",
+            data = mapOf(
+                "region" to region,
+                "startedAt" to startedAt,
+                "services" to services,
+                "reference" to reference,
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel,
         )
         sendEmail(email, subject, html, "incident", language, userId)
     }
@@ -166,13 +221,19 @@ class NotificationsService(
                                   language: String = "en", userId: String? = null) {
         val locale = loadLocale(language)
         val subject = "${locale["domain_registered_subject"] ?: "Domain Registered"} – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "DOMAINS · REGISTERED",
-            preheader = locale["domain_registered_preheader"] ?: "Your domain has been registered.",
-            bodyLines = listOf(
-                "<p style=\"font-size:16px;line-height:1.6\">Domain <strong>$domainName</strong> registered successfully</p>",
-                detailRow("Expires At", expiresAt),
+        val preheader = locale["domain_registered_preheader"] ?: "Your domain has been registered."
+        val headerLabel = locale["domain_registered_eyebrow"] ?: "DOMAINS · REGISTERED"
+
+        val html = templateRenderer.render(
+            templateName = "domain-registered",
+            data = mapOf(
+                "domainName" to domainName,
+                "expiresAt" to expiresAt,
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel,
         )
         sendEmail(email, subject, html, "domain-registered", language, userId)
     }
@@ -185,15 +246,19 @@ class NotificationsService(
         val verifyUrl = if (token.isNotBlank()) "$frontendUrl/verify-email?token=$token" else ""
         val locale = loadLocale(language)
         val subject = interpolate(locale["welcome_subject"] ?: "Welcome to $brandName", mapOf("brandName" to brandName))
-        val bodyLines = mutableListOf<String>()
-        bodyLines.add("<p style=\"font-size:16px;line-height:1.6\">${locale["welcome_body"] ?: "Click the button below to verify your email address and get started."}</p>")
-        if (verifyUrl.isNotBlank()) {
-            bodyLines.add("<a href=\"$verifyUrl\" style=\"display:inline-block;padding:12px 24px;background:#6366f1;color:#fff;text-decoration:none;border-radius:6px;font-weight:600\">Verify Email</a>")
-        }
-        val html = buildHtmlTemplate(
-            headerLabel = "ACCOUNT · WELCOME",
-            preheader = locale["welcome_preheader"] ?: "Verify your email to get started.",
-            bodyLines = bodyLines,
+        val preheader = locale["welcome_preheader"] ?: "Verify your email to get started."
+        val headerLabel = locale["welcome_eyebrow"] ?: "ACCOUNT · WELCOME"
+
+        val html = templateRenderer.render(
+            templateName = "welcome",
+            data = mapOf(
+                "verifyUrl" to verifyUrl,
+                "token" to token,
+            ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel,
         )
         sendEmail(email, subject, html, "welcome", language, userId)
     }
@@ -204,16 +269,23 @@ class NotificationsService(
     ) {
         val locale = loadLocale(language)
         val subject = "${locale["new_login_subject"] ?: "New Login Detected"} – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "SECURITY · NEW DEVICE",
-            preheader = locale["new_login_preheader"] ?: "A new login was detected on your account.",
-            bodyLines = listOf(
-                detailRow("Time", signedInAt),
-                detailRow("IP", fromIp),
-                detailRow("Location", location),
-                detailRow("Device", device),
-                detailRow("Auth Method", authMethod),
+        val preheader = locale["new_login_preheader"] ?: "A new login was detected on your account."
+        val headerLabel = locale["new_login_eyebrow"] ?: "SECURITY · NEW DEVICE"
+
+        val html = templateRenderer.render(
+            templateName = "new-login",
+            data = mapOf(
+                "to" to email,
+                "signedInAt" to signedInAt,
+                "fromIp" to fromIp,
+                "location" to location,
+                "device" to device,
+                "authMethod" to authMethod,
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel,
         )
         sendEmail(email, subject, html, "new-login", language, userId)
     }
@@ -224,15 +296,22 @@ class NotificationsService(
     ) {
         val locale = loadLocale(language)
         val subject = "${locale["password_changed_subject"] ?: "Your Password Was Changed"} – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "SECURITY · CONFIRMATION",
-            preheader = locale["password_changed_preheader"] ?: "Your account password was changed.",
-            bodyLines = listOf(
-                detailRow("Time", changedAt),
-                detailRow("IP", fromIp),
-                detailRow("Location", location),
-                detailRow("Device", device),
+        val preheader = locale["password_changed_preheader"] ?: "Your account password was changed."
+        val headerLabel = locale["password_changed_eyebrow"] ?: "SECURITY · CONFIRMATION"
+
+        val html = templateRenderer.render(
+            templateName = "password-changed",
+            data = mapOf(
+                "to" to email,
+                "changedAt" to changedAt,
+                "fromIp" to fromIp,
+                "location" to location,
+                "device" to device,
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel,
         )
         sendEmail(email, subject, html, "password-changed", language, userId)
     }
@@ -253,14 +332,13 @@ class NotificationsService(
                 "s3Endpoint" to s3Endpoint,
                 "accessKey" to accessKey,
                 "secretKey" to secretKey,
-                "region" to region
+                "region" to region,
             ),
             language = language,
             subject = subject,
             preheader = preheader,
-            headerLabel = headerLabel
+            headerLabel = headerLabel,
         )
-
         sendEmail(email, subject, html, "object-storage-provisioned", language, userId)
     }
 
@@ -271,17 +349,23 @@ class NotificationsService(
     ) {
         val locale = loadLocale(language)
         val subject = "${locale["backup_failed_subject"] ?: "Backup Failed"} – $brandName"
-        val html = buildHtmlTemplate(
-            headerLabel = "BACKUP · FAILED",
-            preheader = locale["backup_failed_preheader"] ?: "A scheduled backup failed.",
-            bodyLines = listOf(
-                detailRow("Server", hostname),
-                detailRow("Backup ID", backupId),
-                detailRow("Scheduled At", scheduledAt),
-                detailRow("Failed At", failedAt),
-                detailRow("Reason", reason),
-                detailRow("Last Successful", lastSuccessful),
+        val preheader = locale["backup_failed_preheader"] ?: "A scheduled backup failed."
+        val headerLabel = locale["backup_failed_eyebrow"] ?: "BACKUP · FAILED"
+
+        val html = templateRenderer.render(
+            templateName = "backup-failed",
+            data = mapOf(
+                "hostname" to hostname,
+                "backupId" to backupId,
+                "scheduledAt" to scheduledAt,
+                "failedAt" to failedAt,
+                "reason" to reason,
+                "lastSuccessful" to lastSuccessful,
             ),
+            language = language,
+            subject = subject,
+            preheader = preheader,
+            headerLabel = headerLabel,
         )
         sendEmail(email, subject, html, "backup-failed", language, userId)
     }
@@ -299,14 +383,13 @@ class NotificationsService(
             templateName = "reinstall-complete",
             data = mapOf(
                 "hostname" to hostname,
-                "newPassword" to newPassword
+                "newPassword" to newPassword,
             ),
             language = language,
             subject = subject,
             preheader = preheader,
-            headerLabel = headerLabel
+            headerLabel = headerLabel,
         )
-
         sendEmail(email, subject, html, "server-reinstalled", language, userId)
     }
 
@@ -329,14 +412,13 @@ class NotificationsService(
                 "priority" to priority,
                 "openedAt" to openedAt,
                 "firstReplyExpected" to firstReplyExpected,
-                "message" to message
+                "message" to message,
             ),
             language = language,
             subject = subject,
             preheader = preheader,
-            headerLabel = headerLabel
+            headerLabel = headerLabel,
         )
-
         sendEmail(email, subject, html, "support-ticket", language, userId)
     }
 
@@ -445,12 +527,6 @@ class NotificationsService(
         // Basic fallback locales for backward compatibility
         private val LOCALE_EN = mapOf(
             "welcome_subject" to "Welcome to {{brandName}}",
-            "password_reset_subject" to "Password Reset",
-            "payment_confirmed_subject" to "Payment Confirmed",
-    companion object {
-        // Basic fallback locales for backward compatibility
-        private val LOCALE_EN = mapOf(
-            "welcome_subject" to "Welcome to {{brandName}}",
             "welcome_preheader" to "Verify your email to get started.",
             "password_reset_subject" to "Password Reset",
             "password_reset_preheader" to "Reset your password.",
@@ -508,7 +584,7 @@ class NotificationsService(
             "object_storage_ready_subject" to "Tu Almacenamiento de Objetos Está Listo",
             "object_storage_ready_preheader" to "Tu bucket de almacenamiento de objetos está listo.",
             "backup_failed_subject" to "Copia de Seguridad Fallida",
-            "backup_failed_preheader" to "Una copia de seguridad programada ha fallado.",
+            "backup_failed_preheader" to "Una copia de seguridad programada ha fallada.",
             "reinstall_complete_subject" to "Reinstalación Completada",
             "reinstall_complete_preheader" to "Tu servidor ha sido reinstalado.",
             "ticket_subject" to "Ticket de Soporte Recibido",
