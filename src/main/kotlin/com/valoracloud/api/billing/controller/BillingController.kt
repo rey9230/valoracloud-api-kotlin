@@ -26,10 +26,26 @@ class BillingController(
     @Hidden
     fun handleWebhook(
         request: HttpServletRequest,
-        @RequestHeader("stripe-signature") signature: String,
+        @RequestHeader("stripe-signature", required = false) signature: String?,
     ): ResponseEntity<Map<String, Any>> {
+        println("═══════════════════════════════════════════════════════════")
+        println("🔔 STRIPE WEBHOOK RECEIVED!")
+        println("   Method: ${request.method}")
+        println("   URI: ${request.requestURI}")
+        println("   Signature present: ${signature != null}")
+        println("   Content-Type: ${request.contentType}")
+        println("═══════════════════════════════════════════════════════════")
+
+        if (signature.isNullOrBlank()) {
+            println("❌ NO STRIPE SIGNATURE HEADER FOUND!")
+            return ResponseEntity.badRequest().body(mapOf("error" to "Missing stripe-signature header"))
+        }
+
         val rawBody = request.reader.readText()
+        println("📦 Body length: ${rawBody.length} chars")
+
         val result = billingService.handleWebhook(rawBody, signature)
+        println("✅ Webhook processed successfully")
         return ResponseEntity.ok(result)
     }
 

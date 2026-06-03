@@ -116,15 +116,23 @@ class BillingService(
     // ─── Event handlers ─────────────────────────────────
 
     private fun handlePaymentSucceeded(event: Event) {
+        log.info("💰 Processing payment_intent.succeeded")
         val paymentIntent =
-                event.dataObjectDeserializer.getObject().orElse(null) as? PaymentIntent ?: return
+                event.dataObjectDeserializer.getObject().orElse(null) as? PaymentIntent ?: run {
+                    log.error("❌ Failed to deserialize PaymentIntent from event")
+                    return
+                }
 
+        log.info("💳 PaymentIntent ID: ${paymentIntent.id}, Metadata: ${paymentIntent.metadata}")
+        
         val orderId =
                 paymentIntent.metadata["orderId"]
                         ?: run {
-                            log.warn("PaymentIntent succeeded without orderId in metadata")
+                            log.warn("⚠️ PaymentIntent succeeded without orderId in metadata")
                             return
                         }
+        
+        log.info("🎯 Processing order: $orderId")
 
         val order = orderRepo.findById(orderId).orElse(null)
         if (order == null) {
