@@ -57,10 +57,15 @@ spring:
             enable: ${SMTP_STARTTLS:true}
           ssl:
             enable: ${SMTP_SSL:false}
+            trust: "*"
           socketFactory:
             port: ${SMTP_PORT:587}
             fallback: false
-        debug: ${MAIL_DEBUG:false}
+          connectiontimeout: 15000
+          timeout: 15000
+          writetimeout: 15000
+        debug: true
+
 
 
   jackson:
