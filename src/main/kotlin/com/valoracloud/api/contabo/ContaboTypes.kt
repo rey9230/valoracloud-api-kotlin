@@ -36,7 +36,7 @@ data class ContaboPagination(
 
 data class ContaboInstance(
     val instanceId: Long,
-    val name: String,
+    val name: String?,
     val displayName: String?,
     val status: String,
     val imageId: String?,
