@@ -1,8 +1,10 @@
 package com.valoracloud.api.plans
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.valoracloud.api.common.config.ALL_ADDONS
 import com.valoracloud.api.common.config.AddonCategory
 import com.valoracloud.api.common.config.AddonMeta
+import com.valoracloud.api.common.config.PlanAddon
 import com.valoracloud.api.common.exceptions.NotFoundException
 import com.valoracloud.api.common.model.ProductType
 import com.valoracloud.api.config.PlanRepository
@@ -42,12 +44,23 @@ class PlansService(
                 )
             } ?: emptyList()
 
-        val availableAddons = (plan.availableAddons as? com.fasterxml.jackson.databind.node.ArrayNode)
-            ?.map { objectMapper.treeToValue(it, com.valoracloud.api.common.config.PlanAddon::class.java) }
+        val availableAddonsFromPlan = (plan.availableAddons as? com.fasterxml.jackson.databind.node.ArrayNode)
+            ?.map { objectMapper.treeToValue(it, PlanAddon::class.java) }
             ?: emptyList()
 
-        planMap["availableAddons"] = availableAddons
+        val enrichedAddons = availableAddonsFromPlan.map { planAddon ->
+            val meta = ALL_ADDONS.find { it.id == planAddon.id }
+            mapOf(
+                "id" to planAddon.id,
+                "priceMonthly" to planAddon.priceMonthly,
+                "label" to (planAddon.label ?: meta?.label),
+                "category" to (meta?.category?.id)
+            )
+        }
+
+        planMap["availableAddons"] = enrichedAddons
         planMap["imageAddons"] = dynamicImageAddons
+        planMap.remove("addons") // Remove the raw JSON field
 
         return planMap
     }
