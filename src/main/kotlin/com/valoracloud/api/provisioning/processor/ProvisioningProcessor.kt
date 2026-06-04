@@ -147,11 +147,21 @@ runcmd: []
 
             // Resolve OS image
             val osSlug = order.os
-            val image =
-                    contabo.findImageBySlug(osSlug)
-                            ?: throw RuntimeException(
-                                    "No Contabo image found for OS slug: \"$osSlug\""
-                            )
+            val uuidRegex = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOption.IGNORE_CASE)
+            
+            val image = if (uuidRegex.matches(osSlug)) {
+                try {
+                    contabo.getImage(osSlug)
+                } catch (e: Exception) {
+                    throw RuntimeException("No Contabo image found for ID: \"$osSlug\"", e)
+                }
+            } else {
+                contabo.findImageBySlug(osSlug)
+                        ?: throw RuntimeException(
+                                "No Contabo image found for OS slug: \"$osSlug\""
+                        )
+            }
+            
             val imageId = image.imageId
             log.info("Resolved OS \"$osSlug\" → imageId $imageId")
 
@@ -163,8 +173,8 @@ runcmd: []
                             )
             log.info("Using Contabo productId: $contaboPlanId")
 
-            // SSH user
-            val sshUser = order.sshUser.ifBlank { resolveDefaultUser(osSlug) }.lowercase()
+            // SSH user (use the actual image name from Contabo to determine default user)
+            val sshUser = order.sshUser.ifBlank { resolveDefaultUser(image.name) }.lowercase()
 
             // Cloud-init
             val cloudInitYaml = buildCloudInit(rootPassword, sshUser)
@@ -284,7 +294,7 @@ runcmd: []
                         serverId,
                         brandDomain,
                         region,
-                        osSlug,
+                        image.name, // Pass the actual image name instead of the slug
                 )
                 provisioningService.logEvent(serverId, "post-provision", "success")
                 postProvisionOk = true
