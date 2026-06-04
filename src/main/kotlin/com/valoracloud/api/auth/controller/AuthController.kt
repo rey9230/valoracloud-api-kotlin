@@ -43,6 +43,10 @@ class AuthController(private val authService: AuthService) {
     @PostMapping("/refresh")
     fun refresh(@Valid @RequestBody dto: RefreshDto): AuthResponse = authService.refresh(dto)
 
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun logout(@Valid @RequestBody dto: RefreshDto) = authService.logout(dto)
+
     @PostMapping("/verify-email")
     fun verifyEmail(@Valid @RequestBody dto: VerifyEmailDto) = authService.verifyEmail(dto)
 

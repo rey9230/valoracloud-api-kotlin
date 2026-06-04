@@ -100,6 +100,14 @@ class AuthService(
         return buildAuthResponse(user)
     }
 
+    fun logout(dto: RefreshDto) {
+        val stored = refreshTokenRepo.findByToken(dto.refreshToken) ?: return
+        if (stored.revokedAt == null) {
+            stored.revokedAt = Instant.now()
+            refreshTokenRepo.save(stored)
+        }
+    }
+
     fun verifyEmail(dto: VerifyEmailDto) {
         if (!jwtProvider.validateToken(dto.token)) throw BadRequestException("Invalid or expired token")
         val userId = jwtProvider.getUserId(dto.token)
