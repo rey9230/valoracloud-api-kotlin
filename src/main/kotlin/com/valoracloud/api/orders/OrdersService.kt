@@ -14,6 +14,7 @@ import com.valoracloud.api.common.model.OrderStatus
 import com.valoracloud.api.common.model.PaymentMethod
 import com.valoracloud.api.common.model.ServiceType
 import com.valoracloud.api.common.utils.EncryptionUtil
+import com.valoracloud.api.config.DomainRepository
 import com.valoracloud.api.config.OrderRepository
 import com.valoracloud.api.config.PlanRepository
 import com.valoracloud.api.entity.Order
@@ -21,7 +22,6 @@ import com.valoracloud.api.provisioning.processor.ProvisioningProcessor
 import java.math.BigDecimal
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional
 class OrdersService(
     private val orderRepository: OrderRepository,
     private val planRepository: PlanRepository,
+    private val domainRepository: DomainRepository,
     private val provisioningProcessor: ProvisioningProcessor,
     private val objectMapper: ObjectMapper,
     @Value("\${stripe.enabled:true}") private val stripeEnabled: Boolean,
@@ -144,20 +145,65 @@ class OrdersService(
         )
     }
 
-    fun findByUser(userId: String, pagination: PaginationDto): PaginatedResponse<Order> {
-        val pageable = PageRequest.of(pagination.page - 1, pagination.limit)
-        val page = orderRepository.findAll(pageable)
-        // Filter by userId manually since we don't have a paged findByUserId
-        val userOrders = page.content.filter { it.userId == userId }
-        return PaginatedResponse(userOrders, userOrders.size.toLong(), pagination.page, pagination.limit, 1)
+    fun findByUser(userId: String, pagination: PaginationDto): PaginatedResponse<OrderResponseDto> {
+        val allOrders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
+        val total = allOrders.size.toLong()
+        val from = pagination.offset.coerceAtMost(allOrders.size)
+        val to = (from + pagination.limit).coerceAtMost(allOrders.size)
+        val page = allOrders.subList(from, to)
+
+        val planIds = page.mapNotNull { it.planId }.distinct()
+        val planMap = planRepository.findAllById(planIds).associateBy { it.id }
+
+        val domainOrderIds = page.filter { it.serviceType == ServiceType.DOMAIN }.map { it.id }
+        val domainMap = domainRepository.findByOrderIdIn(domainOrderIds).associateBy { it.orderId }
+
+        return PaginatedResponse(
+            data = page.map { it.toDto(planMap[it.planId], domainMap[it.id]) },
+            total = total,
+            page = pagination.page,
+            limit = pagination.limit,
+            totalPages = ((total + pagination.limit - 1) / pagination.limit).toInt(),
+        )
     }
 
-    fun findOne(orderId: String, userId: String): Order {
+    fun findOne(orderId: String, userId: String): OrderResponseDto {
         val order = orderRepository.findById(orderId)
             .orElseThrow { NotFoundException("Order", orderId) }
         if (order.userId != userId) throw NotFoundException("Order", orderId)
-        return order
+        val plan = order.planId?.let { planRepository.findById(it).orElse(null) }
+        val domain = if (order.serviceType == ServiceType.DOMAIN)
+            domainRepository.findByOrderId(order.id) else null
+        return order.toDto(plan, domain)
     }
+
+    private fun Order.toDto(
+        plan: com.valoracloud.api.entity.Plan?,
+        domain: com.valoracloud.api.entity.Domain?,
+    ) = OrderResponseDto(
+        id = id,
+        userId = userId,
+        planId = planId,
+        planName = plan?.name,
+        serviceType = serviceType.name,
+        status = status.name,
+        paymentMethod = paymentMethod.name,
+        stripePaymentId = stripePaymentId,
+        billingCycle = billingCycle,
+        basePrice = basePrice,
+        addonsPrice = addonsPrice,
+        setupFee = setupFee,
+        totalAmount = totalAmount,
+        region = region,
+        os = os,
+        addons = addons,
+        sshUser = sshUser,
+        hostname = hostname,
+        rootPassword = rootPassword,
+        domainName = domain?.domainName,
+        createdAt = createdAt.toString(),
+        updatedAt = updatedAt.toString(),
+    )
 }
 
 data class CheckoutResponse(

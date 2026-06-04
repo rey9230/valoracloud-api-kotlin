@@ -3,13 +3,20 @@ package com.valoracloud.api.invoices.service
 import com.valoracloud.api.common.dto.PaginatedResponse
 import com.valoracloud.api.common.dto.PaginationDto
 import com.valoracloud.api.common.exceptions.NotFoundException
+import com.valoracloud.api.common.model.ServiceType
+import com.valoracloud.api.config.DomainRepository
 import com.valoracloud.api.config.InvoiceRepository
+import com.valoracloud.api.config.OrderRepository
+import com.valoracloud.api.config.PlanRepository
 import org.springframework.stereotype.Service
 import java.math.RoundingMode
 
 @Service
 class InvoicesService(
     private val invoiceRepo: InvoiceRepository,
+    private val orderRepo: OrderRepository,
+    private val planRepo: PlanRepository,
+    private val domainRepo: DomainRepository,
 ) {
 
     fun findByUser(userId: String, pagination: PaginationDto): PaginatedResponse<InvoiceDto> {
@@ -19,8 +26,24 @@ class InvoicesService(
         val to = (from + pagination.limit).coerceAtMost(allInvoices.size)
         val page = allInvoices.subList(from, to)
 
+        val orderIds = page.map { it.orderId }.distinct()
+        val orderMap = orderRepo.findAllById(orderIds).associateBy { it.id }
+
+        val planIds = orderMap.values.mapNotNull { it.planId }.distinct()
+        val planMap = planRepo.findAllById(planIds).associateBy { it.id }
+
+        val domainOrderIds = orderMap.values
+            .filter { it.serviceType == ServiceType.DOMAIN }
+            .map { it.id }
+        val domainMap = domainRepo.findByOrderIdIn(domainOrderIds).associateBy { it.orderId }
+
         return PaginatedResponse(
-            data = page.map { it.toDto() },
+            data = page.map { invoice ->
+                val order = orderMap[invoice.orderId]
+                val plan = order?.planId?.let { planMap[it] }
+                val domain = order?.let { domainMap[it.id] }
+                invoice.toDto(order, plan, domain)
+            },
             total = total,
             page = pagination.page,
             limit = pagination.limit,
@@ -31,12 +54,14 @@ class InvoicesService(
     fun findOne(invoiceId: String, userId: String): InvoiceDetailDto {
         val invoice = invoiceRepo.findById(invoiceId).orElse(null)
             ?: throw NotFoundException("Invoice", invoiceId)
+        if (invoice.userId != userId) throw NotFoundException("Invoice", invoiceId)
 
-        if (invoice.userId != userId) {
-            throw NotFoundException("Invoice", invoiceId)
-        }
+        val order = orderRepo.findById(invoice.orderId).orElse(null)
+        val plan = order?.planId?.let { planRepo.findById(it).orElse(null) }
+        val domain = order?.takeIf { it.serviceType == ServiceType.DOMAIN }
+            ?.let { domainRepo.findByOrderId(it.id) }
 
-        return invoice.toDetailDto()
+        return invoice.toDetailDto(order, plan, domain)
     }
 }
 
@@ -50,8 +75,11 @@ data class InvoiceDto(
     val orderId: String?,
     val serviceType: String?,
     val planId: String?,
+    val planName: String?,
     val billingCycle: Int?,
     val region: String?,
+    val hostname: String?,
+    val domainName: String?,
     val orderStatus: String?,
 )
 
@@ -73,15 +101,22 @@ data class InvoiceOrderDto(
     val id: String,
     val serviceType: String,
     val planId: String?,
+    val planName: String?,
     val billingCycle: Int,
     val region: String,
     val os: String?,
+    val hostname: String?,
+    val domainName: String?,
     val totalAmount: String,
     val status: String,
     val createdAt: String,
 )
 
-private fun com.valoracloud.api.entity.Invoice.toDto() = InvoiceDto(
+private fun com.valoracloud.api.entity.Invoice.toDto(
+    order: com.valoracloud.api.entity.Order?,
+    plan: com.valoracloud.api.entity.Plan?,
+    domain: com.valoracloud.api.entity.Domain?,
+) = InvoiceDto(
     id = id,
     amount = amount.setScale(2, RoundingMode.HALF_UP).toPlainString(),
     currency = currency,
@@ -89,14 +124,21 @@ private fun com.valoracloud.api.entity.Invoice.toDto() = InvoiceDto(
     paidAt = paidAt?.toString(),
     createdAt = createdAt.toString(),
     orderId = orderId,
-    serviceType = null,
-    planId = null,
-    billingCycle = null,
-    region = null,
-    orderStatus = null,
+    serviceType = order?.serviceType?.name,
+    planId = order?.planId,
+    planName = plan?.name,
+    billingCycle = order?.billingCycle,
+    region = order?.region,
+    hostname = order?.hostname,
+    domainName = domain?.domainName,
+    orderStatus = order?.status?.name,
 )
 
-private fun com.valoracloud.api.entity.Invoice.toDetailDto() = InvoiceDetailDto(
+private fun com.valoracloud.api.entity.Invoice.toDetailDto(
+    order: com.valoracloud.api.entity.Order?,
+    plan: com.valoracloud.api.entity.Plan?,
+    domain: com.valoracloud.api.entity.Domain?,
+) = InvoiceDetailDto(
     id = id,
     amount = amount.setScale(2, RoundingMode.HALF_UP).toPlainString(),
     currency = currency,
@@ -107,5 +149,20 @@ private fun com.valoracloud.api.entity.Invoice.toDetailDto() = InvoiceDetailDto(
     cryptoAmount = cryptoAmount,
     paidAt = paidAt?.toString(),
     createdAt = createdAt.toString(),
-    order = null,
+    order = order?.let {
+        InvoiceOrderDto(
+            id = it.id,
+            serviceType = it.serviceType.name,
+            planId = it.planId,
+            planName = plan?.name,
+            billingCycle = it.billingCycle,
+            region = it.region,
+            os = it.os,
+            hostname = it.hostname,
+            domainName = domain?.domainName,
+            totalAmount = it.totalAmount.setScale(2, RoundingMode.HALF_UP).toPlainString(),
+            status = it.status.name,
+            createdAt = it.createdAt.toString(),
+        )
+    },
 )

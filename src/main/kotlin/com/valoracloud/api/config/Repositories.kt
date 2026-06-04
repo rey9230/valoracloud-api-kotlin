@@ -86,6 +86,7 @@ interface DomainRepository : JpaRepository<Domain, String> {
     fun findByUserIdOrderByCreatedAtDesc(userId: String): List<Domain>
     fun findByDomainName(domainName: String): Domain?
     fun findByOrderId(orderId: String): Domain?
+    fun findByOrderIdIn(orderIds: List<String>): List<Domain>
 }
 
 @Repository
