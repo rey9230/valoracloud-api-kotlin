@@ -16,5 +16,8 @@ class UsersController(
     fun updateProfile(
         @CurrentUser userId: String,
         @Valid @RequestBody dto: UpdateUserDto,
-    ) = usersService.update(userId, dto)
+    ): Map<String, Any?> {
+        usersService.update(userId, dto)
+        return mapOf("success" to true)
+    }
 }
