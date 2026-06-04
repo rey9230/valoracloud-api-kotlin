@@ -3,6 +3,7 @@ package com.valoracloud.api.servers
 import com.valoracloud.api.auth.security.CurrentUser
 import com.valoracloud.api.common.dto.PaginationDto
 import jakarta.validation.Valid
+import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -46,6 +47,13 @@ class ServersController(
         @CurrentUser userId: String,
         @Valid @RequestBody dto: ReinstallDto,
     ) = serversService.reinstall(id, userId, dto.imageId, dto.password)
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.OK)
+    fun cancel(
+        @PathVariable id: String,
+        @CurrentUser userId: String,
+    ) = serversService.cancel(id, userId)
 
     @GetMapping("/{id}/logs")
     fun getLogs(

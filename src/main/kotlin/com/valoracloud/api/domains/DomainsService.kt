@@ -3,15 +3,20 @@ package com.valoracloud.api.domains
 import com.valoracloud.api.common.exceptions.BadRequestException
 import com.valoracloud.api.common.exceptions.NotFoundException
 import com.valoracloud.api.config.*
+import com.valoracloud.api.contabo.ContaboService
+import com.valoracloud.api.notifications.service.NotificationsService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.time.LocalDate
 
 @Service
 class DomainsService(
     private val domainRepository: DomainRepository,
     private val domainHandleRepository: DomainHandleRepository,
     private val domainTldPricingRepository: DomainTldPricingRepository,
-    // TODO: Inject ContaboService, EncryptionUtil, Stripe, SHKeeper, ProvisioningQueue, ConfigService
+    private val contabo: ContaboService,
+    private val notifications: NotificationsService,
+    // TODO: Inject EncryptionUtil, Stripe, SHKeeper, ProvisioningQueue, ConfigService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -119,7 +124,23 @@ class DomainsService(
         val domain = domainRepository.findById(domainId)
             .orElseThrow { NotFoundException("Domain", domainId) }
         if (domain.userId != userId) throw NotFoundException("Domain", domainId)
-        // TODO: ContaboService.cancelDomain(domain.domainName, ...)
+
+        val cancelDate = dto.cancelDate ?: endOfMonthDate()
+        try {
+            contabo.cancelDomain(domain.domainName, dto.reason, cancelDate)
+            log.info("Domain ${domain.domainName} cancellation scheduled in Contabo for $cancelDate")
+        } catch (e: Exception) {
+            notifications.sendCancellationFailureAlert(
+                serviceType = "DOMAIN",
+                resourceId = domain.id,
+                contaboId = domain.domainName,
+                userId = domain.userId,
+                errorMessage = e.message ?: "Unknown error",
+                errorStack = e.stackTraceToString(),
+            )
+            throw e
+        }
+
         domain.status = com.valoracloud.api.common.model.DomainStatus.CANCELLED
         return domainRepository.save(domain)
     }
@@ -128,7 +149,10 @@ class DomainsService(
         val domain = domainRepository.findById(domainId)
             .orElseThrow { NotFoundException("Domain", domainId) }
         if (domain.userId != userId) throw NotFoundException("Domain", domainId)
-        // TODO: ContaboService.revokeDomainCancellation(domain.domainName)
+
+        contabo.revokeDomainCancellation(domain.domainName)
+        log.info("Domain ${domain.domainName} cancellation revoked in Contabo")
+
         domain.status = com.valoracloud.api.common.model.DomainStatus.ACTIVE
         return domainRepository.save(domain)
     }
@@ -137,7 +161,10 @@ class DomainsService(
         val domain = domainRepository.findById(domainId)
             .orElseThrow { NotFoundException("Domain", domainId) }
         if (domain.userId != userId) throw NotFoundException("Domain", domainId)
-        // TODO: ContaboService.confirmTransferOut(domain.domainName)
+
+        contabo.confirmTransferOut(domain.domainName)
+        log.info("Domain ${domain.domainName} transfer-out confirmed in Contabo")
+
         domain.status = com.valoracloud.api.common.model.DomainStatus.TRANSFER_IN_PROGRESS
         return domainRepository.save(domain)
     }
@@ -146,7 +173,10 @@ class DomainsService(
         val domain = domainRepository.findById(domainId)
             .orElseThrow { NotFoundException("Domain", domainId) }
         if (domain.userId != userId) throw NotFoundException("Domain", domainId)
-        // TODO: ContaboService.revokeTransferOut(domain.domainName)
+
+        contabo.revokeTransferOut(domain.domainName)
+        log.info("Domain ${domain.domainName} transfer-out revoked in Contabo")
+
         domain.status = com.valoracloud.api.common.model.DomainStatus.ACTIVE
         return domainRepository.save(domain)
     }
@@ -209,5 +239,10 @@ class DomainsService(
         if (domain.userId != userId) throw NotFoundException("Domain", domainId)
         // TODO: ContaboService.deleteDnsZone(zoneName)
         return mapOf("success" to true)
+    }
+
+    private fun endOfMonthDate(): String {
+        val now = LocalDate.now()
+        return now.withDayOfMonth(now.lengthOfMonth()).toString()
     }
 }

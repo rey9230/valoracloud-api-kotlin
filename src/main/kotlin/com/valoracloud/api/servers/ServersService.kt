@@ -4,17 +4,24 @@ import com.valoracloud.api.common.dto.PaginatedResponse
 import com.valoracloud.api.common.dto.PaginationDto
 import com.valoracloud.api.common.exceptions.ForbiddenException
 import com.valoracloud.api.common.exceptions.NotFoundException
+import com.valoracloud.api.common.model.ServerStatus
 import com.valoracloud.api.config.ProvisioningLogRepository
 import com.valoracloud.api.config.ServerRepository
+import com.valoracloud.api.contabo.ContaboService
 import com.valoracloud.api.entity.Server
+import com.valoracloud.api.notifications.service.NotificationsService
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
 @Service
 class ServersService(
     private val serverRepository: ServerRepository,
     private val provisioningLogRepository: ProvisioningLogRepository,
-    // TODO: Inject ContaboService, EncryptionUtil, NotificationsService, NodeSSH client
+    private val contabo: ContaboService,
+    private val notifications: NotificationsService,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     fun findByUser(userId: String, dto: PaginationDto): PaginatedResponse<Map<String, Any?>> {
         val servers = serverRepository.findByUserIdOrderByCreatedAtDesc(userId)
         val page = dto.page; val limit = dto.limit
@@ -57,25 +64,62 @@ class ServersService(
         )
     }
 
+    fun cancel(serverId: String, userId: String): Map<String, String> {
+        val server = serverRepository.findById(serverId)
+            .orElseThrow { NotFoundException("Server", serverId) }
+        if (server.userId != userId) throw ForbiddenException("Access denied")
+
+        if (server.status == ServerStatus.CANCELLED) {
+            return mapOf("message" to "Server is already cancelled")
+        }
+
+        if (server.contaboInstanceId.isBlank()) {
+            throw com.valoracloud.api.common.exceptions.AppException(
+                org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
+                "Server has no Contabo instance ID — cannot cancel. Contact support."
+            )
+        }
+
+        try {
+            contabo.cancelInstance(server.contaboInstanceId.toLong())
+            log.info("Server ${server.id} cancellation scheduled in Contabo (instanceId=${server.contaboInstanceId})")
+        } catch (e: Exception) {
+            notifications.sendCancellationFailureAlert(
+                serviceType = "VPS",
+                resourceId = server.id,
+                contaboId = server.contaboInstanceId,
+                userId = server.userId,
+                errorMessage = e.message ?: "Unknown error",
+                errorStack = e.stackTraceToString(),
+            )
+            throw e
+        }
+
+        server.status = ServerStatus.CANCELLED
+        serverRepository.save(server)
+
+        return mapOf("message" to "Server cancellation scheduled. It will remain active until end of billing period.")
+    }
+
     fun start(serverId: String, userId: String): Map<String, String> {
         val server = getServerForAction(serverId, userId)
-        // TODO: ContaboService.startInstance(server.contaboInstanceId)
-        server.status = com.valoracloud.api.common.model.ServerStatus.RUNNING
+        contabo.startInstance(server.contaboInstanceId.toLong())
+        server.status = ServerStatus.RUNNING
         serverRepository.save(server)
         return mapOf("message" to "Server starting")
     }
 
     fun stop(serverId: String, userId: String): Map<String, String> {
         val server = getServerForAction(serverId, userId)
-        // TODO: ContaboService.stopInstance(server.contaboInstanceId)
-        server.status = com.valoracloud.api.common.model.ServerStatus.STOPPED
+        contabo.stopInstance(server.contaboInstanceId.toLong())
+        server.status = ServerStatus.STOPPED
         serverRepository.save(server)
         return mapOf("message" to "Server stopping")
     }
 
     fun restart(serverId: String, userId: String): Map<String, String> {
         val server = getServerForAction(serverId, userId)
-        // TODO: ContaboService.restartInstance(server.contaboInstanceId)
+        contabo.restartInstance(server.contaboInstanceId.toLong())
         return mapOf("message" to "Server restarting")
     }
 
@@ -102,7 +146,7 @@ class ServersService(
         val server = serverRepository.findById(serverId)
             .orElseThrow { NotFoundException("Server", serverId) }
         if (server.userId != userId) throw ForbiddenException("Access denied")
-        if (server.status == com.valoracloud.api.common.model.ServerStatus.SUSPENDED) {
+        if (server.status == ServerStatus.SUSPENDED) {
             throw ForbiddenException("Server is suspended. Contact support to reactivate your service.")
         }
         return server

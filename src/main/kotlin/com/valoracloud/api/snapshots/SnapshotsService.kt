@@ -5,6 +5,8 @@ import com.valoracloud.api.common.exceptions.ForbiddenException
 import com.valoracloud.api.common.exceptions.NotFoundException
 import com.valoracloud.api.config.ServerRepository
 import com.valoracloud.api.config.SnapshotRepository
+import com.valoracloud.api.contabo.ContaboService
+import com.valoracloud.api.notifications.service.NotificationsService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -12,7 +14,8 @@ import org.springframework.stereotype.Service
 class SnapshotsService(
     private val snapshotRepository: SnapshotRepository,
     private val serverRepository: ServerRepository,
-    // TODO: Inject ContaboService
+    private val contabo: ContaboService,
+    private val notifications: NotificationsService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -27,12 +30,9 @@ class SnapshotsService(
         val snapshot = snapshotRepository.findById(snapshotId)
             .orElseThrow { NotFoundException("Snapshot", snapshotId) }
         if (snapshot.serverId != serverId) throw ForbiddenException("Access denied")
-
-        // Verify server ownership
         val server = serverRepository.findById(serverId)
             .orElseThrow { NotFoundException("Server", serverId) }
         if (server.userId != userId) throw ForbiddenException("Access denied")
-
         return snapshot
     }
 
@@ -47,7 +47,6 @@ class SnapshotsService(
         }
 
         // TODO: ContaboService.createSnapshot(server.contaboInstanceId, dto)
-
         return snapshotRepository.save(
             com.valoracloud.api.entity.Snapshot(
                 serverId = serverId,
@@ -62,13 +61,10 @@ class SnapshotsService(
         val snapshot = snapshotRepository.findById(snapshotId)
             .orElseThrow { NotFoundException("Snapshot", snapshotId) }
         if (snapshot.serverId != serverId) throw ForbiddenException("Access denied")
-
         val server = serverRepository.findById(serverId)
             .orElseThrow { NotFoundException("Server", serverId) }
         if (server.userId != userId) throw ForbiddenException("Access denied")
-
         // TODO: ContaboService.updateSnapshot(server.contaboInstanceId, snapshot.contaboSnapshotId, dto)
-
         dto.name?.let { snapshot.name = it }
         dto.description?.let { snapshot.description = it }
         return snapshotRepository.save(snapshot)
@@ -78,14 +74,32 @@ class SnapshotsService(
         val snapshot = snapshotRepository.findById(snapshotId)
             .orElseThrow { NotFoundException("Snapshot", snapshotId) }
         if (snapshot.serverId != serverId) throw ForbiddenException("Access denied")
-
         val server = serverRepository.findById(serverId)
             .orElseThrow { NotFoundException("Server", serverId) }
         if (server.userId != userId) throw ForbiddenException("Access denied")
 
-        // TODO: ContaboService.deleteSnapshot(server.contaboInstanceId, snapshot.contaboSnapshotId)
-        snapshotRepository.delete(snapshot)
+        if (snapshot.contaboSnapshotId.isBlank()) {
+            throw ForbiddenException("Snapshot has no Contabo ID — cannot delete. Contact support.")
+        }
+        if (server.contaboInstanceId.isBlank()) {
+            throw ForbiddenException("Server has no Contabo instance ID — cannot delete snapshot. Contact support.")
+        }
 
+        try {
+            contabo.deleteSnapshot(server.contaboInstanceId.toLong(), snapshot.contaboSnapshotId)
+            log.info("Snapshot ${snapshot.id} deleted in Contabo (instanceId=${server.contaboInstanceId})")
+        } catch (e: Exception) {
+            notifications.sendCancellationFailureAlert(
+                serviceType = "SNAPSHOT",
+                resourceId = snapshot.id,
+                contaboId = snapshot.contaboSnapshotId,
+                userId = server.userId,
+                errorMessage = e.message ?: "Unknown error",
+                errorStack = e.stackTraceToString(),
+            )
+            throw e
+        }
+        snapshotRepository.delete(snapshot)
         return mapOf("message" to "Snapshot deleted successfully")
     }
 
@@ -93,13 +107,11 @@ class SnapshotsService(
         val snapshot = snapshotRepository.findById(snapshotId)
             .orElseThrow { NotFoundException("Snapshot", snapshotId) }
         if (snapshot.serverId != serverId) throw ForbiddenException("Access denied")
-
         val server = serverRepository.findById(serverId)
             .orElseThrow { NotFoundException("Server", serverId) }
         if (server.userId != userId) throw ForbiddenException("Access denied")
 
         // TODO: ContaboService.rollbackSnapshot(server.contaboInstanceId, snapshot.contaboSnapshotId)
-
         return mapOf(
             "message" to "Rollback initiated successfully. Note: All snapshots created after this one have been deleted.",
         )

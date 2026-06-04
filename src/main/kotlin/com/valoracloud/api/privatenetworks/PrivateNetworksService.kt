@@ -6,7 +6,9 @@ import com.valoracloud.api.common.exceptions.NotFoundException
 import com.valoracloud.api.config.PrivateNetworkAssignmentRepository
 import com.valoracloud.api.config.PrivateNetworkRepository
 import com.valoracloud.api.config.ServerRepository
+import com.valoracloud.api.contabo.ContaboService
 import com.valoracloud.api.entity.PrivateNetworkAssignment
+import com.valoracloud.api.notifications.service.NotificationsService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -15,7 +17,8 @@ class PrivateNetworksService(
     private val privateNetworkRepository: PrivateNetworkRepository,
     private val privateNetworkAssignmentRepository: PrivateNetworkAssignmentRepository,
     private val serverRepository: ServerRepository,
-    // TODO: Inject ContaboService
+    private val contabo: ContaboService,
+    private val notifications: NotificationsService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -32,9 +35,7 @@ class PrivateNetworksService(
 
     fun createPrivateNetwork(userId: String, dto: CreatePrivateNetworkDto): Any {
         log.info("Creating private network for user $userId: ${dto.name}")
-
         // TODO: ContaboService.createPrivateNetwork(dto) → returns contaboNetworkId
-
         return privateNetworkRepository.save(
             com.valoracloud.api.entity.PrivateNetwork(
                 userId = userId,
@@ -50,9 +51,7 @@ class PrivateNetworksService(
         val network = privateNetworkRepository.findById(networkId)
             .orElseThrow { NotFoundException("Private network", networkId) }
         if (network.userId != userId) throw ForbiddenException("Access denied")
-
         // TODO: ContaboService.updatePrivateNetwork(network.contaboNetworkId, dto)
-
         if (dto.name != null) network.name = dto.name
         if (dto.description != null) network.description = dto.description
         return privateNetworkRepository.save(network)
@@ -68,7 +67,26 @@ class PrivateNetworksService(
             throw BadRequestException("Cannot delete private network with assigned instances")
         }
 
-        // TODO: ContaboService.deletePrivateNetwork(network.contaboNetworkId)
+        if (network.contaboNetworkId.isBlank()) {
+            throw com.valoracloud.api.common.exceptions.BadRequestException(
+                "Private network has no Contabo ID — cannot delete. Contact support."
+            )
+        }
+
+        try {
+            contabo.deletePrivateNetwork(network.contaboNetworkId.toLong())
+            log.info("Private network ${network.id} deleted in Contabo (contaboId=${network.contaboNetworkId})")
+        } catch (e: Exception) {
+            notifications.sendCancellationFailureAlert(
+                serviceType = "PRIVATE_NETWORK",
+                resourceId = network.id,
+                contaboId = network.contaboNetworkId,
+                userId = network.userId,
+                errorMessage = e.message ?: "Unknown error",
+                errorStack = e.stackTraceToString(),
+            )
+            throw e
+        }
         privateNetworkRepository.delete(network)
     }
 
@@ -87,7 +105,19 @@ class PrivateNetworksService(
 
         val existingAssignments = privateNetworkAssignmentRepository.findByServerId(serverId)
 
-        // TODO: ContaboService.assignInstanceToPrivateNetwork(network.contaboNetworkId, server.contaboInstanceId)
+        if (network.contaboNetworkId.isBlank()) {
+            throw com.valoracloud.api.common.exceptions.BadRequestException(
+                "Private network has no Contabo ID — cannot assign instance. Contact support."
+            )
+        }
+        if (server.contaboInstanceId.isBlank()) {
+            throw com.valoracloud.api.common.exceptions.BadRequestException(
+                "Server has no Contabo instance ID — cannot assign to network. Contact support."
+            )
+        }
+
+        contabo.assignInstanceToPrivateNetwork(network.contaboNetworkId.toLong(), server.contaboInstanceId.toLong())
+        log.info("Server ${server.id} assigned to private network ${network.id} in Contabo")
 
         return privateNetworkAssignmentRepository.save(
             PrivateNetworkAssignment(
@@ -115,7 +145,15 @@ class PrivateNetworksService(
         val assignment = privateNetworkAssignmentRepository.findByPrivateNetworkIdAndServerId(networkId, serverId)
             ?: throw NotFoundException("Assignment", "$networkId/$serverId")
 
-        // TODO: ContaboService.unassignInstanceFromPrivateNetwork(network.contaboNetworkId, server.contaboInstanceId)
+        if (network.contaboNetworkId.isBlank()) {
+            throw com.valoracloud.api.common.exceptions.BadRequestException(
+                "Private network has no Contabo ID — cannot unassign instance. Contact support."
+            )
+        }
+
+        contabo.unassignInstanceFromPrivateNetwork(network.contaboNetworkId.toLong(), server.contaboInstanceId.toLong())
+        log.info("Server ${server.id} unassigned from private network ${network.id} in Contabo")
+
         privateNetworkAssignmentRepository.delete(assignment)
     }
 }

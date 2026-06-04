@@ -4,6 +4,8 @@ import com.valoracloud.api.common.exceptions.BadRequestException
 import com.valoracloud.api.common.exceptions.ForbiddenException
 import com.valoracloud.api.common.exceptions.NotFoundException
 import com.valoracloud.api.config.*
+import com.valoracloud.api.contabo.ContaboService
+import com.valoracloud.api.notifications.service.NotificationsService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -13,7 +15,8 @@ class FirewallsService(
     private val firewallRuleRepository: FirewallRuleRepository,
     private val firewallAssignmentRepository: FirewallAssignmentRepository,
     private val serverRepository: ServerRepository,
-    // TODO: Inject ContaboService
+    private val contabo: ContaboService,
+    private val notifications: NotificationsService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -30,9 +33,7 @@ class FirewallsService(
 
     fun createFirewall(userId: String, dto: CreateFirewallDto): Any {
         log.info("Creating firewall for user $userId: ${dto.name}")
-
         // TODO: ContaboService.createFirewall(dto) → returns contaboFirewallId
-
         val firewall = firewallRepository.save(
             com.valoracloud.api.entity.Firewall(
                 userId = userId,
@@ -42,8 +43,6 @@ class FirewallsService(
                 status = dto.status,
             )
         )
-
-        // Create rules
         dto.rules?.inbound?.forEach { rule ->
             firewallRuleRepository.save(
                 com.valoracloud.api.entity.FirewallRule(
@@ -57,7 +56,6 @@ class FirewallsService(
                 )
             )
         }
-
         return firewall
     }
 
@@ -65,9 +63,7 @@ class FirewallsService(
         val firewall = firewallRepository.findById(firewallId)
             .orElseThrow { NotFoundException("Firewall", firewallId) }
         if (firewall.userId != userId) throw ForbiddenException("Access denied")
-
         // TODO: ContaboService.updateFirewall(firewall.contaboFirewallId, dto)
-
         if (dto.name != null) firewall.name = dto.name
         if (dto.description != null) firewall.description = dto.description
         if (dto.status != null) firewall.status = dto.status
@@ -78,14 +74,10 @@ class FirewallsService(
         val firewall = firewallRepository.findById(firewallId)
             .orElseThrow { NotFoundException("Firewall", firewallId) }
         if (firewall.userId != userId) throw ForbiddenException("Access denied")
-
         // TODO: ContaboService.updateFirewallRules(firewall.contaboFirewallId, dto)
-
-        // Delete existing rules and recreate
         firewallRuleRepository.findByFirewallId(firewallId).forEach {
             firewallRuleRepository.delete(it)
         }
-
         dto.rules.inbound?.forEach { rule ->
             firewallRuleRepository.save(
                 com.valoracloud.api.entity.FirewallRule(
@@ -99,7 +91,6 @@ class FirewallsService(
                 )
             )
         }
-
         return firewallRepository.findById(firewallId).get()
     }
 
@@ -113,7 +104,24 @@ class FirewallsService(
             throw BadRequestException("Cannot delete firewall with active instance assignments")
         }
 
-        // TODO: ContaboService.deleteFirewall(firewall.contaboFirewallId)
+        if (firewall.contaboFirewallId.isBlank()) {
+            throw BadRequestException("Firewall has no Contabo ID — cannot delete. Contact support.")
+        }
+
+        try {
+            contabo.deleteFirewall(firewall.contaboFirewallId)
+            log.info("Firewall ${firewall.id} deleted in Contabo (contaboId=${firewall.contaboFirewallId})")
+        } catch (e: Exception) {
+            notifications.sendCancellationFailureAlert(
+                serviceType = "FIREWALL",
+                resourceId = firewall.id,
+                contaboId = firewall.contaboFirewallId,
+                userId = firewall.userId,
+                errorMessage = e.message ?: "Unknown error",
+                errorStack = e.stackTraceToString(),
+            )
+            throw e
+        }
         firewallRepository.delete(firewall)
     }
 
@@ -130,7 +138,15 @@ class FirewallsService(
             throw BadRequestException("Instance already assigned to this firewall")
         }
 
-        // TODO: ContaboService.assignInstanceToFirewall(firewall.contaboFirewallId, server.contaboInstanceId)
+        if (firewall.contaboFirewallId.isBlank()) {
+            throw BadRequestException("Firewall has no Contabo ID — cannot assign instance. Contact support.")
+        }
+        if (server.contaboInstanceId.isBlank()) {
+            throw BadRequestException("Server has no Contabo instance ID — cannot assign to firewall. Contact support.")
+        }
+
+        contabo.assignInstanceToFirewall(firewall.contaboFirewallId, server.contaboInstanceId.toLong())
+        log.info("Server ${server.id} assigned to firewall ${firewall.id} in Contabo")
 
         return firewallAssignmentRepository.save(
             com.valoracloud.api.entity.FirewallAssignment(
@@ -152,7 +168,13 @@ class FirewallsService(
         val assignment = firewallAssignmentRepository.findByFirewallIdAndServerId(firewallId, serverId)
             ?: throw NotFoundException("Assignment", "$firewallId/$serverId")
 
-        // TODO: ContaboService.unassignInstanceFromFirewall(firewall.contaboFirewallId, server.contaboInstanceId)
+        if (firewall.contaboFirewallId.isBlank()) {
+            throw BadRequestException("Firewall has no Contabo ID — cannot unassign instance. Contact support.")
+        }
+
+        contabo.unassignInstanceFromFirewall(firewall.contaboFirewallId, server.contaboInstanceId.toLong())
+        log.info("Server ${server.id} unassigned from firewall ${firewall.id} in Contabo")
+
         firewallAssignmentRepository.delete(assignment)
     }
 

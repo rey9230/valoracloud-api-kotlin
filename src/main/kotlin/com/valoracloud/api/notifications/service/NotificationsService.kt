@@ -471,6 +471,51 @@ class NotificationsService(
         }
     }
 
+    fun sendCancellationFailureAlert(
+        serviceType: String,
+        resourceId: String,
+        contaboId: String,
+        userId: String,
+        errorMessage: String,
+        errorStack: String?,
+    ) {
+        val now = Instant.now().toString()
+        val html = """
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/></head>
+<body style="font-family:monospace;background:#0d1117;color:#c9d1d9;padding:24px">
+  <h2 style="color:#f85149;margin:0 0 16px">🚨 Cancellation Failed — Manual Action Required</h2>
+  <p style="color:#f0883e;margin:0 0 16px">The following resource could <b>NOT</b> be cancelled in Contabo and is still running. Manual cancellation is required to avoid charges.</p>
+  <table style="border-collapse:collapse;width:100%">
+    <tr><td style="padding:4px 12px 4px 0;color:#8b949e">Service Type</td><td><b>${serviceType.uppercase()}</b></td></tr>
+    <tr><td style="padding:4px 12px 4px 0;color:#8b949e">Resource ID (DB)</td><td><b>$resourceId</b></td></tr>
+    <tr><td style="padding:4px 12px 4px 0;color:#8b949e">Contabo ID</td><td><b>$contaboId</b></td></tr>
+    <tr><td style="padding:4px 12px 4px 0;color:#8b949e">User ID</td><td>$userId</td></tr>
+    <tr><td style="padding:4px 12px 4px 0;color:#8b949e">Timestamp</td><td>$now</td></tr>
+  </table>
+  <h3 style="color:#f0883e;margin:20px 0 8px">Error</h3>
+  <pre style="background:#161b22;border:1px solid #30363d;padding:12px;border-radius:6px;overflow:auto;white-space:pre-wrap">$errorMessage</pre>
+  ${if (errorStack != null) "<h3 style=\"color:#8b949e;margin:16px 0 8px\">Stack Trace</h3><pre style=\"background:#161b22;border:1px solid #30363d;padding:12px;border-radius:6px;overflow:auto;white-space:pre-wrap;font-size:11px\">$errorStack</pre>" else ""}
+  <p style="margin-top:24px;color:#f85149"><b>Action required:</b> Cancel this resource manually in the Contabo panel to avoid continued billing.</p>
+</body>
+</html>
+        """.trimIndent()
+
+        try {
+            val msg = mailSender.createMimeMessage()
+            val helper = MimeMessageHelper(msg, true)
+            helper.setFrom("\"$brandName\" <$from>")
+            helper.setTo("renielgonzalez@valoracloud.com")
+            helper.setSubject("🚨 [CANCELLATION FAILED] ${serviceType.uppercase()} — $contaboId")
+            helper.setText(html, true)
+            mailSender.send(msg)
+            log.info("Cancellation failure alert sent for $serviceType/$resourceId (contaboId=$contaboId)")
+        } catch (e: Exception) {
+            log.error("Failed to send cancellation failure alert for $serviceType/$resourceId: ${e.message}")
+        }
+    }
+
     // ─── Core sendEmail ──────────────────────────────────────────────────
 
     private fun sendEmail(
