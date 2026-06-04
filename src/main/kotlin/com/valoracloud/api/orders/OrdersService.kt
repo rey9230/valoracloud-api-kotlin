@@ -1,9 +1,11 @@
 package com.valoracloud.api.orders
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.stripe.Stripe
 import com.stripe.model.PaymentIntent
 import com.stripe.param.PaymentIntentCreateParams
 import com.valoracloud.api.billing.service.ProvisionJobData
+import com.valoracloud.api.common.config.PlanAddon
 import com.valoracloud.api.common.dto.PaginatedResponse
 import com.valoracloud.api.common.dto.PaginationDto
 import com.valoracloud.api.common.exceptions.BadRequestException
@@ -28,6 +30,7 @@ class OrdersService(
     private val orderRepository: OrderRepository,
     private val planRepository: PlanRepository,
     private val provisioningProcessor: ProvisioningProcessor,
+    private val objectMapper: ObjectMapper,
     @Value("\${stripe.enabled:true}") private val stripeEnabled: Boolean,
     @Value("\${stripe.secret-key:}") private val stripeSecretKey: String,
     @Value("\${app.encryption-key:}") private val encryptionKey: String,
@@ -43,19 +46,42 @@ class OrdersService(
         val plan = planRepository.findById(dto.planId)
             .orElseThrow { NotFoundException("Plan", dto.planId) }
 
+        // 1. Calculate Base Price
         val basePrice: BigDecimal = when (dto.billingCycle) {
             1  -> plan.price1Month
             6  -> plan.price6Months
             12 -> plan.price12Months
             else -> throw BadRequestException("billingCycle must be 1, 6, or 12")
         }
+
+        // 2. Calculate Setup Fee
         val setupFee: BigDecimal = when (dto.billingCycle) {
             1  -> plan.setup1Month
             6  -> plan.setup6Months
             12 -> plan.setup12Months
             else -> BigDecimal.ZERO
         }
-        val totalAmount = basePrice.add(setupFee)
+
+        // 3. Calculate Addons Price
+        var addonsPrice = BigDecimal.ZERO
+        if (dto.addons.isNotEmpty()) {
+            val availableAddons = (plan.availableAddons as? com.fasterxml.jackson.databind.node.ArrayNode)
+                ?.map { objectMapper.treeToValue(it, PlanAddon::class.java) }
+                ?: emptyList()
+
+            for (addonId in dto.addons) {
+                val addonConfig = availableAddons.find { it.id == addonId }
+                if (addonConfig != null) {
+                    // Multiply addon monthly price by billing cycle months
+                    val monthlyPrice = BigDecimal.valueOf(addonConfig.priceMonthly)
+                    val cyclePrice = monthlyPrice.multiply(BigDecimal(dto.billingCycle))
+                    addonsPrice = addonsPrice.add(cyclePrice)
+                }
+            }
+        }
+
+        // 4. Calculate Final Total Amount
+        val totalAmount = basePrice.add(setupFee).add(addonsPrice)
 
         val storedPassword = if (encryptionKey.isNotBlank())
             EncryptionUtil.encrypt(dto.rootPassword, encryptionKey)
@@ -70,9 +96,10 @@ class OrdersService(
             billingCycle = dto.billingCycle,
             basePrice = basePrice,
             setupFee = setupFee,
+            addonsPrice = addonsPrice, // Save calculated addons price
             totalAmount = totalAmount,
             region = dto.region,
-            os = dto.imageId,
+            os = dto.imageId ?: "",
             addons = dto.addons,
             rootPassword = storedPassword,
             hostname = dto.displayName,
@@ -88,7 +115,7 @@ class OrdersService(
                     planId = plan.id,
                     userId = userId,
                     region = dto.region,
-                    os = dto.imageId,
+                    os = dto.imageId ?: "",
                     hostname = dto.displayName,
                 ))
             } catch (e: Exception) {

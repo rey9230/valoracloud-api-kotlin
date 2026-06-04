@@ -1,7 +1,6 @@
 package com.valoracloud.api.provisioning.processor
 
 import com.valoracloud.api.billing.service.ProvisionJobData
-import com.valoracloud.api.common.config.findAddonMeta
 import com.valoracloud.api.common.model.OrderStatus
 import com.valoracloud.api.common.model.ServerStatus
 import com.valoracloud.api.common.utils.EncryptionUtil
@@ -148,11 +147,10 @@ runcmd: []
 
             // Resolve OS image
             val osSlug = order.os
-            val resolvedSlug = findAddonMeta(osSlug)?.contaboValue ?: osSlug
             val image =
-                    contabo.findImageBySlug(resolvedSlug)
+                    contabo.findImageBySlug(osSlug)
                             ?: throw RuntimeException(
-                                    "No Contabo image found for OS slug: \"$resolvedSlug\" (from input \"$osSlug\")"
+                                    "No Contabo image found for OS slug: \"$osSlug\""
                             )
             val imageId = image.imageId
             log.info("Resolved OS \"$osSlug\" → imageId $imageId")
