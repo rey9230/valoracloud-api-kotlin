@@ -64,7 +64,7 @@ spring:
           connectiontimeout: 15000
           timeout: 15000
           writetimeout: 15000
-        debug: true
+        debug: false
 
 
 

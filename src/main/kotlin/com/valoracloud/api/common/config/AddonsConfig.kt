@@ -50,21 +50,7 @@ val STORAGE_ADDONS = listOf(
 )
 
 // ─── Image / OS Add-ons ────────────────────────────────
-val IMAGE_ADDONS = listOf(
-    AddonMeta("image-ubuntu", AddonCategory.IMAGE, "Ubuntu 24.04", "ubuntu-24.04", true),
-    AddonMeta("image-ubuntu-22", AddonCategory.IMAGE, "Ubuntu 22.04", "ubuntu-22.04"),
-    AddonMeta("image-debian", AddonCategory.IMAGE, "Debian 12", "debian-12"),
-    AddonMeta("image-centos", AddonCategory.IMAGE, "CentOS Stream 9", "centos-stream-9"),
-    AddonMeta("image-rocky", AddonCategory.IMAGE, "Rocky Linux 9", "rocky-linux-9"),
-    AddonMeta("image-alma", AddonCategory.IMAGE, "AlmaLinux 9", "almalinux-9"),
-    AddonMeta("image-fedora", AddonCategory.IMAGE, "Fedora 40", "fedora-40"),
-    AddonMeta("image-windows", AddonCategory.IMAGE, "Windows Server", "windows"),
-    AddonMeta("image-cpanel", AddonCategory.IMAGE, "cPanel", "cpanel"),
-    AddonMeta("image-plesk-linux", AddonCategory.IMAGE, "Plesk + Linux", "plesk-linux"),
-    AddonMeta("image-plesk-windows", AddonCategory.IMAGE, "Plesk + Windows", "plesk-windows"),
-    AddonMeta("image-webmin", AddonCategory.IMAGE, "Webmin", "webmin"),
-    AddonMeta("image-webmin-lamp", AddonCategory.IMAGE, "Webmin + LAMP", "webmin-lamp"),
-)
+val IMAGE_ADDONS = emptyList<AddonMeta>()
 
 // ─── Backup Add-ons ────────────────────────────────────
 val BACKUP_ADDONS = listOf(
