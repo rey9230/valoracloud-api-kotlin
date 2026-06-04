@@ -10,7 +10,6 @@ import javax.crypto.SecretKey
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import kotlin.time.Duration.Companion.days
 
 @Component
 class JwtProvider(
@@ -32,7 +31,7 @@ class JwtProvider(
         Keys.hmacShaKeyFor(Decoders.BASE64.decode(encoded))
     }
     private val accessDuration: Duration = parseDuration(accessExpiry)
-    val refreshDuration: Duration = parseDuration(30.days.toString())
+    val refreshDuration: Duration = Duration.ofDays(30)
 
     private fun parseDuration(s: String): Duration =
             try {
