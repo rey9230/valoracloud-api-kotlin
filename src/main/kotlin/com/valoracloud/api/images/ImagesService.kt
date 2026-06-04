@@ -1,7 +1,8 @@
 package com.valoracloud.api.images
 
-import com.valoracloud.api.common.exceptions.NotFoundException
+import com.valoracloud.api.common.exceptions.BadRequestException
 import com.valoracloud.api.contabo.ContaboService
+import com.valoracloud.api.contabo.OsType
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -25,12 +26,18 @@ class ImagesService(
     }
 
     fun createCustomImage(dto: CreateCustomImageDto): Any {
+        val osType = try {
+            OsType.valueOf(dto.osType.uppercase())
+        } catch (e: IllegalArgumentException) {
+            throw BadRequestException("Invalid osType. Must be LINUX or WINDOWS.")
+        }
+
         return contaboService.createCustomImage(
             com.valoracloud.api.contabo.ContaboCreateCustomImageRequest(
                 name = dto.name,
                 description = dto.description,
                 url = dto.url,
-                osType = dto.osType,
+                osType = osType,
                 version = dto.version
             )
         )
