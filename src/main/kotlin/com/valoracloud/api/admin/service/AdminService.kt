@@ -1737,6 +1737,22 @@ class AdminService(
         server.status = if (ready) ServerStatus.RUNNING else ServerStatus.STOPPED
         server.os = resolvedImageId
         val saved = serverRepo.save(server)
+        if (ready) {
+            val user = userRepo.findByIdOrNull(server.userId)
+            if (user != null) {
+                try {
+                    notifications.sendReinstallCompleteEmail(
+                        email = user.email,
+                        hostname = server.hostname,
+                        newPassword = currentPassword,
+                        language = user.language,
+                        userId = user.id
+                    )
+                } catch (e: Exception) {
+                    logger.error("Failed to send reinstall complete email: ${e.message}")
+                }
+            }
+        }
         return mapOf(
                 "id" to saved.id,
                 "hostname" to saved.hostname,

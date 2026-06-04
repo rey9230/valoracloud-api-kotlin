@@ -9,6 +9,10 @@ import com.valoracloud.api.entity.RefreshToken
 import com.valoracloud.api.entity.User
 import com.valoracloud.api.common.model.Role
 import com.valoracloud.api.common.model.UserStatus
+import com.valoracloud.api.facebook.CompleteRegistrationParams
+import com.valoracloud.api.facebook.FacebookConversionsService
+import com.valoracloud.api.facebook.FbClientContext
+import com.valoracloud.api.notifications.service.NotificationsService
 import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
@@ -22,10 +26,10 @@ class AuthService(
     private val refreshTokenRepo: RefreshTokenRepository,
     private val jwtProvider: JwtProvider,
     private val passwordEncoder: PasswordEncoder,
-    // private val notifications: NotificationsService, // TODO
-    // private val facebookConversions: FacebookConversionsService, // TODO
+    private val notifications: NotificationsService,
+    private val facebookConversions: FacebookConversionsService,
 ) {
-    fun register(dto: RegisterDto): AuthResponse {
+    fun register(dto: RegisterDto, ctx: FbClientContext): AuthResponse {
         if (userRepo.existsByEmail(dto.email)) throw ConflictException("Email already registered")
         val user = userRepo.save(User(
             email = dto.email,
@@ -33,22 +37,35 @@ class AuthService(
             firstName = dto.firstName,
             lastName = dto.lastName,
         ))
-        // notifications.sendVerificationEmail(user.email, jwtProvider.generateVerificationToken(user.id))
+        notifications.sendWelcomeEmail(user.email, jwtProvider.generateVerificationToken(user.id), user.language, user.id)
+        facebookConversions.trackCompleteRegistration(
+            CompleteRegistrationParams(user.id, user.email, user.firstName, user.lastName),
+            ctx
+        )
         return buildAuthResponse(user)
     }
 
-    fun login(dto: LoginDto): AuthResponse {
+    fun login(dto: LoginDto, ip: String, userAgent: String): AuthResponse {
         val user = userRepo.findByEmailAndDeletedAtIsNull(dto.email)
             ?: throw UnauthorizedException("Invalid credentials")
         if (user.status == UserStatus.SUSPENDED || user.status == UserStatus.BANNED)
             throw ForbiddenException("Account ${user.status.name.lowercase()}")
         if (!passwordEncoder.matches(dto.password, user.password))
             throw UnauthorizedException("Invalid credentials")
-        // notifications.sendNewLoginEmail(user)
+        notifications.sendNewLoginEmail(
+            email = user.email,
+            signedInAt = Instant.now().toString(),
+            fromIp = ip,
+            location = "",
+            device = userAgent,
+            authMethod = "password",
+            language = user.language,
+            userId = user.id
+        )
         return buildAuthResponse(user)
     }
 
-    fun adminLogin(dto: LoginDto): AuthResponse {
+    fun adminLogin(dto: LoginDto, ip: String, userAgent: String): AuthResponse {
         val user = userRepo.findByEmailAndDeletedAtIsNull(dto.email)
             ?: throw UnauthorizedException("Invalid credentials")
         if (user.role != Role.ADMIN)
@@ -57,6 +74,16 @@ class AuthService(
             throw ForbiddenException("Account ${user.status.name.lowercase()}")
         if (!passwordEncoder.matches(dto.password, user.password))
             throw UnauthorizedException("Invalid credentials")
+        notifications.sendNewLoginEmail(
+            email = user.email,
+            signedInAt = Instant.now().toString(),
+            fromIp = ip,
+            location = "",
+            device = userAgent,
+            authMethod = "password",
+            language = user.language,
+            userId = user.id
+        )
         return buildAuthResponse(user)
     }
 
@@ -81,15 +108,23 @@ class AuthService(
         userRepo.save(user)
     }
 
-    fun forgotPassword(dto: ForgotPasswordDto) {
+    fun forgotPassword(dto: ForgotPasswordDto, ip: String, userAgent: String) {
         val user = userRepo.findByEmailAndDeletedAtIsNull(dto.email) ?: return // silent
         if (user.status != UserStatus.ACTIVE) return
         val resetToken = jwtProvider.generateVerificationToken(user.id)
-        // notifications.sendPasswordResetEmail(user.email, resetToken)
+        notifications.sendPasswordResetEmail(
+            email = user.email,
+            token = resetToken,
+            language = user.language,
+            requestedAt = Instant.now().toString(),
+            fromIp = ip,
+            location = "",
+            device = userAgent
+        )
         log.info("Password reset requested for {}", user.email)
     }
 
-    fun resetPassword(dto: ResetPasswordDto) {
+    fun resetPassword(dto: ResetPasswordDto, ip: String, userAgent: String) {
         if (!jwtProvider.validateToken(dto.token)) throw BadRequestException("Invalid or expired token")
         val userId = jwtProvider.getUserId(dto.token)
         val user = userRepo.findById(userId).orElseThrow { NotFoundException("User", userId) }
@@ -97,6 +132,15 @@ class AuthService(
         // Revoke all refresh tokens for security
         refreshTokenRepo.deleteByUserId(user.id)
         userRepo.save(user)
+        notifications.sendPasswordChangedEmail(
+            email = user.email,
+            changedAt = Instant.now().toString(),
+            fromIp = ip,
+            location = "",
+            device = userAgent,
+            language = user.language,
+            userId = user.id
+        )
     }
 
     fun me(userId: String): UserDto =
@@ -107,7 +151,7 @@ class AuthService(
         val refreshToken = refreshTokenRepo.save(RefreshToken(
             token = jwtProvider.generateRefreshToken(user.id),
             userId = user.id,
-            expiresAt = Instant.now().plus(jwtProvider.refreshDuration),
+expiresAt = Instant.now().plus(jwtProvider.refreshDuration),
         ))
         return AuthResponse(accessToken, refreshToken.token, user.toUserDto())
     }
