@@ -127,7 +127,7 @@ runcmd: []
         val orderId = data.orderId
         val planId = data.planId
         val userId = data.userId
-        val region = data.region
+        val regionAddonId = data.region
         val os = data.os
         val hostname = data.hostname
         var serverId: String? = null
@@ -144,6 +144,12 @@ runcmd: []
             val rootPassword = order.rootPassword?.let { decrypt(it) } ?: generatePassword()
 
             val displayName = hostname ?: "srv-${orderId.take(8)}"
+
+            // Resolve Region
+            val region = com.valoracloud.api.common.config.findAddonMeta(regionAddonId)?.contaboValue
+                    ?: throw RuntimeException("Unknown region addon ID: $regionAddonId")
+            
+            log.info("Resolved Region \"$regionAddonId\" → $region")
 
             // Resolve OS image
             val osSlug = order.os
