@@ -88,6 +88,10 @@ class OrdersService(
             EncryptionUtil.encrypt(dto.rootPassword, encryptionKey)
         else dto.rootPassword
 
+        val imageId = dto.imageId ?: ""
+        val isWindows = imageId.contains("windows", ignoreCase = true)
+        val sshUser = if (isWindows) "administrator" else "admin"
+
         val order = orderRepository.save(Order(
             userId = userId,
             planId = plan.id,
@@ -97,13 +101,14 @@ class OrdersService(
             billingCycle = dto.billingCycle,
             basePrice = basePrice,
             setupFee = setupFee,
-            addonsPrice = addonsPrice, // Save calculated addons price
+            addonsPrice = addonsPrice,
             totalAmount = totalAmount,
             region = dto.region,
-            os = dto.imageId ?: "",
+            os = imageId,
             addons = dto.addons,
             rootPassword = storedPassword,
             hostname = dto.displayName,
+            sshUser = sshUser,
         ))
 
         // When Stripe is disabled, auto-approve and provision immediately

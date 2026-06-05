@@ -275,14 +275,16 @@ class ContaboService(
         region: String,
         imageId: String,
         displayName: String,
+        period: Long = 1,
         rootPassword: Long? = null,
         userData: String? = null,
-        defaultUser: String = "root",
+        defaultUser: String = "admin",
     ): ContaboInstance {
         val req = ContaboCreateInstanceRequest(
             imageId = imageId,
             productId = productId,
             region = region,
+            period = period,
             displayName = displayName,
             rootPassword = rootPassword,
             userData = userData,

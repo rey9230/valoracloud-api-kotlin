@@ -171,16 +171,44 @@ runcmd: []
             val imageId = image.imageId
             log.info("Resolved OS \"$osSlug\" → imageId $imageId")
 
-            // Resolve Contabo productId
-            val contaboPlanId =
-                    plan?.contaboPlanId
-                            ?: throw RuntimeException(
-                                    "Plan has no contaboPlanId configured for order $orderId"
-                            )
-            log.info("Using Contabo productId: $contaboPlanId")
+            // Resolve Contabo productId based on storage addon.
+            // Windows uses the same productId as Linux — only the imageId differs.
+            val isWindowsImage = image.name.contains("windows", ignoreCase = true)
+                    || image.osType?.equals("Windows", ignoreCase = true) == true
 
-            // SSH user (use the actual image name from Contabo to determine default user)
-            val sshUser = order.sshUser.ifBlank { resolveDefaultUser(image.name) }.lowercase()
+            val storageAddon = order.addons.firstOrNull { it.startsWith("storage-") }
+            val storageType = when {
+                storageAddon == null -> "nvme"
+                storageAddon.contains("ssd") -> "ssd"
+                storageAddon.contains("storage") -> "storage"
+                else -> "nvme"
+            }
+
+            val contaboPlanId = when {
+                storageType == "ssd" && !plan?.contaboPlanIdSsd.isNullOrBlank() -> {
+                    log.info("SSD storage addon — using SSD productId: ${plan!!.contaboPlanIdSsd}")
+                    plan.contaboPlanIdSsd!!
+                }
+                storageType == "storage" && !plan?.contaboPlanIdStorage.isNullOrBlank() -> {
+                    log.info("Storage addon — using Storage productId: ${plan!!.contaboPlanIdStorage}")
+                    plan.contaboPlanIdStorage!!
+                }
+                else -> {
+                    val id = plan?.contaboPlanId
+                        ?: throw RuntimeException("Plan has no contaboPlanId configured for order $orderId")
+                    if (storageType == "ssd" && plan.contaboPlanIdSsd.isNullOrBlank())
+                        log.warn("SSD storage selected but plan.contaboPlanIdSsd is not set — falling back to NVMe productId $id")
+                    if (storageType == "storage" && plan.contaboPlanIdStorage.isNullOrBlank())
+                        log.warn("Storage addon selected but plan.contaboPlanIdStorage is not set — falling back to NVMe productId $id")
+                    id
+                }
+            }
+            log.info("Contabo productId=$contaboPlanId  storageAddon=$storageAddon  windows=$isWindowsImage")
+
+            // defaultUser is determined by OS type, not by order.sshUser.
+            // Contabo allowed values: "admin" | "root" (Linux) — "admin" | "administrator" (Windows)
+            val sshUser = if (isWindowsImage) "administrator" else "admin"
+            log.info("defaultUser=$sshUser (windows=$isWindowsImage)")
 
             // Cloud-init
             val cloudInitYaml = buildCloudInit(rootPassword, sshUser)
@@ -226,16 +254,23 @@ runcmd: []
                 log.warn("Could not create Contabo secret: ${e.message}")
             }
 
+            // Contabo period: valid values are 1, 3, 6, 12 months
+            val period = when (order.billingCycle) {
+                3, 6, 12 -> order.billingCycle.toLong()
+                else -> 1L
+            }
+
             // Create instance
             val instance =
                     contabo.createInstance(
-                            contaboPlanId,
-                            region,
-                            imageId,
-                            displayName,
-                            secretId,
-                            cloudInitB64,
-                            sshUser,
+                            productId = contaboPlanId,
+                            region = region,
+                            imageId = imageId,
+                            displayName = displayName,
+                            period = period,
+                            rootPassword = secretId,
+                            userData = cloudInitB64,
+                            defaultUser = sshUser,
                     )
             log.info("Cloud-init chpasswd for user=$sshUser injected (order $orderId)")
 

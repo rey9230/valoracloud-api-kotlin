@@ -61,6 +61,7 @@ data class ContaboCreateInstanceRequest(
     val imageId: String,
     val productId: String,
     val region: String,
+    val period: Long = 1,
     val displayName: String? = null,
     val sshKeys: List<Long>? = null,
     val rootPassword: Long? = null,
