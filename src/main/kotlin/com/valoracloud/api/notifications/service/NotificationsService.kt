@@ -316,6 +316,7 @@ class NotificationsService(
         sendEmail(email, subject, html, "password-changed", language, userId)
     }
 
+
     fun sendObjectStorageReadyEmail(
         email: String, displayName: String, s3Endpoint: String, accessKey: String,
         secretKey: String, region: String, language: String = "en", userId: String? = null,
