@@ -180,6 +180,36 @@ class AdminController(private val admin: AdminService) {
     fun updatePlanStatus(@PathVariable planId: String, @RequestBody dto: UpdatePlanStatusDto) =
         admin.updatePlanStatus(planId, dto)
 
+    @PatchMapping("/plans/{planId}/addons")
+    fun updatePlanAddons(
+        @PathVariable planId: String,
+        @RequestBody dto: UpdatePlanAddonsDto,
+    ) = admin.updatePlanAddons(planId, dto)
+
+    @PatchMapping("/plans/{planId}/addons/{addonId}")
+    fun updatePlanAddon(
+        @PathVariable planId: String,
+        @PathVariable addonId: String,
+        @RequestBody dto: UpdateSingleAddonPriceDto,
+    ) = admin.updatePlanAddon(planId, addonId, dto)
+
+    // ════════════════════════════════════════════════════════════
+    // Addon Catalog
+    // ════════════════════════════════════════════════════════════
+
+    @GetMapping("/addon-catalog")
+    fun listAddonCatalog() = admin.listAddonCatalog()
+
+    @PostMapping("/addon-catalog")
+    fun createAddonCatalog(@RequestBody dto: CreateAddonCatalogDto) = admin.createAddonCatalog(dto)
+
+    @PatchMapping("/addon-catalog/{id}")
+    fun updateAddonCatalog(@PathVariable id: String, @RequestBody dto: UpdateAddonCatalogDto) =
+        admin.updateAddonCatalog(id, dto)
+
+    @DeleteMapping("/addon-catalog/{id}")
+    fun deleteAddonCatalog(@PathVariable id: String) = admin.deleteAddonCatalog(id)
+
     // ════════════════════════════════════════════════════════════
     // TLD Pricing
     // ════════════════════════════════════════════════════════════

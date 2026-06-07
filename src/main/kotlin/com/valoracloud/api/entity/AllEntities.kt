@@ -822,3 +822,21 @@ class EmailLog(
         @Column(name = "errorMessage") var errorMessage: String? = null,
         @Column(name = "sentAt") var sentAt: Instant = Instant.now(),
 )
+
+// ─────────────────────────────────────────────────────────
+// AddonCatalog
+// ─────────────────────────────────────────────────────────
+@Entity
+@Table(name = "addon_catalog")
+@EntityListeners(AuditingEntityListener::class)
+class AddonCatalog(
+        @Id val id: String = "",
+        @Column(nullable = false) var category: String = "",
+        @Column(nullable = false) var label: String = "",
+        @Column(name = "contabo_value") var contaboValue: String? = null,
+        @Column(name = "billing_type") var billingType: String = "monthly_recurring",
+        @Column(name = "is_default") var isDefault: Boolean = false,
+        @Column(name = "sort_order") var sortOrder: Int = 0,
+        @CreatedDate @Column(name = "created_at", updatable = false) var createdAt: Instant = Instant.now(),
+        @LastModifiedDate @Column(name = "updated_at") var updatedAt: Instant = Instant.now(),
+)

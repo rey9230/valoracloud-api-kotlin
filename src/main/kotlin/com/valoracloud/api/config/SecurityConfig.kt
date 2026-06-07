@@ -50,6 +50,12 @@ class SecurityConfig(
                                     "/domains/tld-pricing/**",
                             )
                             .permitAll()
+                    // Public POST endpoints
+                    auth.requestMatchers(
+                                    HttpMethod.POST,
+                                    "/plans/*/quote",
+                            )
+                            .permitAll()
                     // Admin only
                     auth.requestMatchers("/admin/**").hasRole("ADMIN")
                     // Everything else requires auth

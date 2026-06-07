@@ -217,3 +217,10 @@ interface MaintenanceWindowRepository : JpaRepository<MaintenanceWindow, String>
 interface EmailLogRepository : JpaRepository<EmailLog, String> {
     fun findByUserIdOrderBySentAtDesc(userId: String): List<EmailLog>
 }
+
+// ─── Addon Catalog ───────────────────────────────────────
+@Repository
+interface AddonCatalogRepository : JpaRepository<AddonCatalog, String> {
+    fun findAllByOrderBySortOrderAsc(): List<AddonCatalog>
+    fun findByCategoryOrderBySortOrderAsc(category: String): List<AddonCatalog>
+}

@@ -182,6 +182,38 @@ data class UpdatePlanDto(
     val status: String? = null,
 )
 
+// ─── Addon Catalog DTOs ─────────────────────────────────────────
+
+data class CreateAddonCatalogDto(
+    val id: String,
+    val category: String,
+    val label: String,
+    val contaboValue: String? = null,
+    val billingType: String = "monthly_recurring",
+    val isDefault: Boolean = false,
+    val sortOrder: Int = 0,
+)
+
+data class UpdateAddonCatalogDto(
+    val category: String? = null,
+    val label: String? = null,
+    val contaboValue: String? = null,
+    val billingType: String? = null,
+    val isDefault: Boolean? = null,
+    val sortOrder: Int? = null,
+)
+
+// ─── Plan Addon Management DTOs ────────────────────────────────
+
+data class UpdatePlanAddonsDto(
+    val addons: List<com.valoracloud.api.common.config.PlanAddon>,
+)
+
+data class UpdateSingleAddonPriceDto(
+    val priceMonthly: Double? = null,
+    val regionPrices: Map<String, Double>? = null,
+)
+
 // ─── TLD Pricing DTOs ──────────────────────────────────────────
 data class CreateTldPricingDto(
     val tld: String,

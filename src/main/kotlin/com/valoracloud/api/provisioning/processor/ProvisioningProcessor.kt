@@ -40,6 +40,7 @@ class ProvisioningProcessor(
         private val txHelper: ProvisioningTxHelper,
         private val serverMonitorRepo: ServerMonitorRepository,
         private val domainTldPricingRepo: DomainTldPricingRepository,
+        private val addonCatalogRepo: AddonCatalogRepository,
         @Value("\${app.encryption-key:}") private val encryptionKey: String,
         @Value("\${app.brand.domain:valoracloud.com}") private val brandDomain: String,
         @Value("\${app.provisioning.dry-run:false}") private val dryRun: Boolean,
@@ -146,7 +147,7 @@ runcmd: []
             val displayName = hostname ?: "srv-${orderId.take(8)}"
 
             // Resolve Region
-            val region = com.valoracloud.api.common.config.findAddonMeta(regionAddonId)?.contaboValue
+            val region = addonCatalogRepo.findById(regionAddonId).orElse(null)?.contaboValue
                     ?: throw RuntimeException("Unknown region addon ID: $regionAddonId")
             
             log.info("Resolved Region \"$regionAddonId\" → $region")

@@ -1,7 +1,5 @@
 package com.valoracloud.api.plans
 
-import com.valoracloud.api.common.config.ALL_ADDONS
-import com.valoracloud.api.common.config.ALLOWED_TERMS
 import com.valoracloud.api.facebook.FacebookConversionsService
 import com.valoracloud.api.facebook.ViewContentParams
 import jakarta.servlet.http.HttpServletRequest
@@ -17,10 +15,11 @@ class PlansController(
     fun findAll(@RequestParam(required = false) type: String?) = plansService.findAll(type)
 
     @GetMapping("/addons")
-    fun getAddons() = mapOf(
-        "addons" to ALL_ADDONS,
-        "billingTerms" to ALLOWED_TERMS,
-    )
+    fun getAddons() = plansService.getAllAddons()
+
+    @PostMapping("/{planId}/quote")
+    fun getQuote(@PathVariable planId: String, @RequestBody dto: QuoteRequestDto) =
+        plansService.calculateQuote(planId, dto)
 
     @GetMapping("/{id}")
     fun findOne(@PathVariable id: String, request: HttpServletRequest): Any {

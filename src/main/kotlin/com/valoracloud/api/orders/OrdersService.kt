@@ -73,9 +73,8 @@ class OrdersService(
             for (addonId in dto.addons) {
                 val addonConfig = availableAddons.find { it.id == addonId }
                 if (addonConfig != null) {
-                    // Multiply addon monthly price by billing cycle months
-                    val monthlyPrice = BigDecimal.valueOf(addonConfig.priceMonthly)
-                    val cyclePrice = monthlyPrice.multiply(BigDecimal(dto.billingCycle))
+                    val effectivePrice = addonConfig.regionPrices[dto.region] ?: addonConfig.priceMonthly
+                    val cyclePrice = BigDecimal.valueOf(effectivePrice).multiply(BigDecimal(dto.billingCycle))
                     addonsPrice = addonsPrice.add(cyclePrice)
                 }
             }

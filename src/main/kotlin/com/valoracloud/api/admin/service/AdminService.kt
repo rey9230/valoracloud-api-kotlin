@@ -2,6 +2,7 @@ package com.valoracloud.api.admin.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.valoracloud.api.admin.dto.*
+import com.valoracloud.api.common.config.PlanAddon
 import com.valoracloud.api.auth.security.JwtProvider
 import com.valoracloud.api.common.dto.PaginatedResponse
 import com.valoracloud.api.common.dto.PaginationDto
@@ -49,6 +50,7 @@ class AdminService(
         private val tagRepo: TagRepository,
         private val refreshTokenRepo: RefreshTokenRepository,
         private val provisioningLogRepo: ProvisioningLogRepository,
+        private val addonCatalogRepo: AddonCatalogRepository,
         private val contabo: ContaboService,
         private val jwt: JwtProvider,
         private val notifications: NotificationsService,
@@ -954,6 +956,74 @@ class AdminService(
         val plan = planRepo.findByIdOrNull(planId) ?: throw NotFoundException("Plan", planId)
         plan.status = PlanStatus.valueOf(dto.status)
         return planRepo.save(plan)
+    }
+
+    fun updatePlanAddons(planId: String, dto: UpdatePlanAddonsDto): Map<String, Any?> {
+        val plan = planRepo.findByIdOrNull(planId) ?: throw NotFoundException("Plan", planId)
+        plan.availableAddons = mapper.valueToTree(dto.addons)
+        planRepo.save(plan)
+        return mapOf("planId" to planId, "addons" to dto.addons)
+    }
+
+    fun updatePlanAddon(
+        planId: String,
+        addonId: String,
+        dto: UpdateSingleAddonPriceDto,
+    ): Map<String, Any?> {
+        val plan = planRepo.findByIdOrNull(planId) ?: throw NotFoundException("Plan", planId)
+        val addons = (plan.availableAddons as? com.fasterxml.jackson.databind.node.ArrayNode)
+            ?.map { mapper.treeToValue(it, PlanAddon::class.java) }
+            ?.toMutableList()
+            ?: throw BadRequestException("Plan has no addons configured")
+        val idx = addons.indexOfFirst { it.id == addonId }
+        if (idx == -1) throw NotFoundException("Addon", addonId)
+        val current = addons[idx]
+        addons[idx] = current.copy(
+            priceMonthly = dto.priceMonthly ?: current.priceMonthly,
+            regionPrices = dto.regionPrices ?: current.regionPrices,
+        )
+        plan.availableAddons = mapper.valueToTree(addons)
+        planRepo.save(plan)
+        return mapOf("planId" to planId, "addonId" to addonId, "updated" to addons[idx])
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // Addon Catalog
+    // ════════════════════════════════════════════════════════════
+
+    fun listAddonCatalog() = addonCatalogRepo.findAllByOrderBySortOrderAsc()
+
+    fun createAddonCatalog(dto: CreateAddonCatalogDto): AddonCatalog {
+        if (addonCatalogRepo.existsById(dto.id))
+            throw BadRequestException("Addon '${dto.id}' already exists")
+        return addonCatalogRepo.save(
+            AddonCatalog(
+                id = dto.id,
+                category = dto.category,
+                label = dto.label,
+                contaboValue = dto.contaboValue,
+                billingType = dto.billingType,
+                isDefault = dto.isDefault,
+                sortOrder = dto.sortOrder,
+            )
+        )
+    }
+
+    fun updateAddonCatalog(id: String, dto: UpdateAddonCatalogDto): AddonCatalog {
+        val addon = addonCatalogRepo.findByIdOrNull(id) ?: throw NotFoundException("Addon", id)
+        dto.category?.let { addon.category = it }
+        dto.label?.let { addon.label = it }
+        dto.contaboValue?.let { addon.contaboValue = it }
+        dto.billingType?.let { addon.billingType = it }
+        dto.isDefault?.let { addon.isDefault = it }
+        dto.sortOrder?.let { addon.sortOrder = it }
+        return addonCatalogRepo.save(addon)
+    }
+
+    fun deleteAddonCatalog(id: String): Map<String, String> {
+        if (!addonCatalogRepo.existsById(id)) throw NotFoundException("Addon", id)
+        addonCatalogRepo.deleteById(id)
+        return mapOf("message" to "Addon deleted")
     }
 
     // ════════════════════════════════════════════════════════════
