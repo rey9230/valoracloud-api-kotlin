@@ -78,6 +78,7 @@ interface ObjectStorageRepository : JpaRepository<ObjectStorage, String> {
     fun findByUserIdAndId(userId: String, id: String): ObjectStorage?
     fun findByContaboStorageId(contaboStorageId: String): ObjectStorage?
     fun findByOrderId(orderId: String): ObjectStorage?
+    fun findByServerId(serverId: String): ObjectStorage?
 }
 
 // ─── Domain ──────────────────────────────────────────────

@@ -149,7 +149,11 @@ data class CreatePlanDto(
     val setup6Months: BigDecimal = BigDecimal.ZERO,
     val setup12Months: BigDecimal = BigDecimal.ZERO,
     val contaboPlanId: String,
+    val contaboPlanIdSsd: String? = null,
+    val contaboPlanIdStorage: String? = null,
+    val contaboPlanIdWindows: String? = null,
     val contaboCostPrice: BigDecimal? = null,
+    val marginPercent: BigDecimal? = null,
     val regions: List<String> = emptyList(),
     val availableAddons: List<String> = emptyList(),
     val storageTB: Double? = null,
@@ -174,7 +178,11 @@ data class UpdatePlanDto(
     val setup6Months: BigDecimal? = null,
     val setup12Months: BigDecimal? = null,
     val contaboPlanId: String? = null,
+    val contaboPlanIdSsd: String? = null,
+    val contaboPlanIdStorage: String? = null,
+    val contaboPlanIdWindows: String? = null,
     val contaboCostPrice: BigDecimal? = null,
+    val marginPercent: BigDecimal? = null,
     val regions: List<String>? = null,
     val availableAddons: List<String>? = null,
     val storageTB: Double? = null,
@@ -189,6 +197,7 @@ data class CreateAddonCatalogDto(
     val category: String,
     val label: String,
     val contaboValue: String? = null,
+    val contaboCostPrice: BigDecimal? = null,
     val billingType: String = "monthly_recurring",
     val isDefault: Boolean = false,
     val sortOrder: Int = 0,
@@ -198,6 +207,7 @@ data class UpdateAddonCatalogDto(
     val category: String? = null,
     val label: String? = null,
     val contaboValue: String? = null,
+    val contaboCostPrice: BigDecimal? = null,
     val billingType: String? = null,
     val isDefault: Boolean? = null,
     val sortOrder: Int? = null,
@@ -212,6 +222,17 @@ data class UpdatePlanAddonsDto(
 data class UpdateSingleAddonPriceDto(
     val priceMonthly: Double? = null,
     val regionPrices: Map<String, Double>? = null,
+)
+
+data class SuggestPlanPricesDto(
+    val contaboCostPrice: BigDecimal? = null,
+    val marginPercent: BigDecimal? = null,
+)
+
+data class ApplyPlanPricesDto(
+    val contaboCostPrice: BigDecimal? = null,
+    val marginPercent: BigDecimal? = null,
+    val applyAddons: Boolean = true,
 )
 
 // ─── TLD Pricing DTOs ──────────────────────────────────────────

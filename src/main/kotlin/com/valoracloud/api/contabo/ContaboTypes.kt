@@ -57,6 +57,12 @@ data class ContaboIpV4(
     val netmaskCidr: Int,
 )
 
+data class ContaboCreateInstanceAddOns(
+    val privateNetworking: Map<String, Any>? = null,
+    val backup: Map<String, Any>? = null,
+    val extraStorage: Map<String, Any>? = null,
+)
+
 data class ContaboCreateInstanceRequest(
     val imageId: String,
     val productId: String,
@@ -67,6 +73,8 @@ data class ContaboCreateInstanceRequest(
     val rootPassword: Long? = null,
     val defaultUser: String? = null,
     val userData: String? = null,
+    val license: String? = null,
+    val addOns: ContaboCreateInstanceAddOns? = null,
 )
 
 data class ContaboVncAccess(

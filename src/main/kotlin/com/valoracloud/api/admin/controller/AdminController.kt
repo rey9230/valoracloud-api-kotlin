@@ -193,6 +193,24 @@ class AdminController(private val admin: AdminService) {
         @RequestBody dto: UpdateSingleAddonPriceDto,
     ) = admin.updatePlanAddon(planId, addonId, dto)
 
+    @PostMapping("/plans/{planId}/pricing/suggest")
+    fun suggestPlanPrices(
+        @PathVariable planId: String,
+        @RequestBody(required = false) dto: SuggestPlanPricesDto?,
+    ) = admin.suggestPlanPrices(planId, dto ?: SuggestPlanPricesDto())
+
+    @PostMapping("/plans/{planId}/pricing/apply")
+    fun applySuggestedPlanPrices(
+        @PathVariable planId: String,
+        @RequestBody dto: ApplyPlanPricesDto,
+    ) = admin.applySuggestedPlanPrices(planId, dto)
+
+    @PostMapping("/plans/{planId}/addons/apply-margin")
+    fun applyMarginToPlanAddons(
+        @PathVariable planId: String,
+        @RequestBody(required = false) dto: SuggestPlanPricesDto?,
+    ) = admin.applyMarginToPlanAddons(planId, dto ?: SuggestPlanPricesDto())
+
     // ════════════════════════════════════════════════════════════
     // Addon Catalog
     // ════════════════════════════════════════════════════════════

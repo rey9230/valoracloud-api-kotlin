@@ -110,6 +110,8 @@ app:
   whois-privacy:
     handle-id: ${WHOIS_PRIVACY_HANDLE_ID:}
     price: ${WHOIS_PRIVACY_PRICE:2.99}
+  pricing:
+    default-margin-percent: ${PRICING_DEFAULT_MARGIN_PERCENT:30}
 
 # ─── Stripe (flat — matches BillingService @Value) ─────
 stripe:

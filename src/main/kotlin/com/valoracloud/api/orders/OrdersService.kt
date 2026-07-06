@@ -1,14 +1,11 @@
 package com.valoracloud.api.orders
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.stripe.Stripe
 import com.stripe.model.PaymentIntent
 import com.stripe.param.PaymentIntentCreateParams
 import com.valoracloud.api.billing.service.ProvisionJobData
-import com.valoracloud.api.common.config.PlanAddon
 import com.valoracloud.api.common.dto.PaginatedResponse
 import com.valoracloud.api.common.dto.PaginationDto
-import com.valoracloud.api.common.exceptions.BadRequestException
 import com.valoracloud.api.common.exceptions.NotFoundException
 import com.valoracloud.api.common.model.OrderStatus
 import com.valoracloud.api.common.model.PaymentMethod
@@ -18,6 +15,7 @@ import com.valoracloud.api.config.DomainRepository
 import com.valoracloud.api.config.OrderRepository
 import com.valoracloud.api.config.PlanRepository
 import com.valoracloud.api.entity.Order
+import com.valoracloud.api.plans.PricingService
 import com.valoracloud.api.provisioning.processor.ProvisioningProcessor
 import java.math.BigDecimal
 import org.slf4j.LoggerFactory
@@ -31,7 +29,7 @@ class OrdersService(
     private val planRepository: PlanRepository,
     private val domainRepository: DomainRepository,
     private val provisioningProcessor: ProvisioningProcessor,
-    private val objectMapper: ObjectMapper,
+    private val pricingService: PricingService,
     @Value("\${stripe.enabled:true}") private val stripeEnabled: Boolean,
     @Value("\${stripe.secret-key:}") private val stripeSecretKey: String,
     @Value("\${app.encryption-key:}") private val encryptionKey: String,
@@ -47,41 +45,12 @@ class OrdersService(
         val plan = planRepository.findById(dto.planId)
             .orElseThrow { NotFoundException("Plan", dto.planId) }
 
-        // 1. Calculate Base Price
-        val basePrice: BigDecimal = when (dto.billingCycle) {
-            1  -> plan.price1Month
-            6  -> plan.price6Months
-            12 -> plan.price12Months
-            else -> throw BadRequestException("billingCycle must be 1, 6, or 12")
-        }
-
-        // 2. Calculate Setup Fee
-        val setupFee: BigDecimal = when (dto.billingCycle) {
-            1  -> plan.setup1Month
-            6  -> plan.setup6Months
-            12 -> plan.setup12Months
-            else -> BigDecimal.ZERO
-        }
-
-        // 3. Calculate Addons Price
-        var addonsPrice = BigDecimal.ZERO
-        if (dto.addons.isNotEmpty()) {
-            val availableAddons = (plan.availableAddons as? com.fasterxml.jackson.databind.node.ArrayNode)
-                ?.map { objectMapper.treeToValue(it, PlanAddon::class.java) }
-                ?: emptyList()
-
-            for (addonId in dto.addons) {
-                val addonConfig = availableAddons.find { it.id == addonId }
-                if (addonConfig != null) {
-                    val effectivePrice = addonConfig.regionPrices[dto.region] ?: addonConfig.priceMonthly
-                    val cyclePrice = BigDecimal.valueOf(effectivePrice).multiply(BigDecimal(dto.billingCycle))
-                    addonsPrice = addonsPrice.add(cyclePrice)
-                }
-            }
-        }
-
-        // 4. Calculate Final Total Amount
-        val totalAmount = basePrice.add(setupFee).add(addonsPrice)
+        val pricing = pricingService.calculatePricing(
+            plan = plan,
+            billingCycle = dto.billingCycle,
+            regionAddonId = dto.region,
+            selectedAddonIds = dto.addons,
+        )
 
         val storedPassword = if (encryptionKey.isNotBlank())
             EncryptionUtil.encrypt(dto.rootPassword, encryptionKey)
@@ -98,13 +67,13 @@ class OrdersService(
             status = OrderStatus.PENDING_PAYMENT,
             paymentMethod = if (!stripeEnabled) PaymentMethod.STRIPE else PaymentMethod.STRIPE,
             billingCycle = dto.billingCycle,
-            basePrice = basePrice,
-            setupFee = setupFee,
-            addonsPrice = addonsPrice,
-            totalAmount = totalAmount,
+            basePrice = pricing.baseMonthly,
+            setupFee = pricing.setupFee,
+            addonsPrice = pricing.addonsPriceForCycle,
+            totalAmount = pricing.total,
             region = dto.region,
             os = imageId,
-            addons = dto.addons,
+            addons = pricing.addonEntries.map { it.id },
             rootPassword = storedPassword,
             hostname = dto.displayName,
             sshUser = sshUser,
@@ -130,7 +99,7 @@ class OrdersService(
         }
 
         // Create Stripe PaymentIntent
-        val amountCents = totalAmount.multiply(BigDecimal(100)).toLong()
+        val amountCents = pricing.total.multiply(BigDecimal(100)).toLong()
         val intent = PaymentIntent.create(
             PaymentIntentCreateParams.builder()
                 .setAmount(amountCents)

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.valoracloud.api.common.config.ALLOWED_TERMS
 import com.valoracloud.api.common.config.PlanAddon
-import com.valoracloud.api.common.exceptions.BadRequestException
 import com.valoracloud.api.common.exceptions.NotFoundException
 import com.valoracloud.api.common.model.ProductType
 import com.valoracloud.api.config.AddonCatalogRepository
@@ -14,7 +13,6 @@ import com.valoracloud.api.entity.AddonCatalog
 import com.valoracloud.api.entity.Plan
 import com.valoracloud.api.images.ImagesService
 import java.math.BigDecimal
-import java.math.RoundingMode
 import org.springframework.stereotype.Service
 
 @Service
@@ -23,6 +21,7 @@ class PlansService(
     private val imagesService: ImagesService,
     private val objectMapper: ObjectMapper,
     private val addonCatalogRepository: AddonCatalogRepository,
+    private val pricingService: PricingService,
 ) {
     fun findAll(productType: String? = null): List<Plan> {
         return if (productType != null) {
@@ -91,49 +90,29 @@ class PlansService(
         val plan = planRepository.findById(planId)
             .orElseThrow { NotFoundException("Plan", planId) }
 
-        val baseMonthly: BigDecimal = when (dto.billingCycle) {
-            1  -> plan.price1Month
-            6  -> plan.price6Months
-            12 -> plan.price12Months
-            else -> throw BadRequestException("billingCycle must be 1, 6, or 12")
-        }
-        val setupFee: BigDecimal = when (dto.billingCycle) {
-            1  -> plan.setup1Month
-            6  -> plan.setup6Months
-            12 -> plan.setup12Months
-            else -> BigDecimal.ZERO
-        }
+        val pricing = pricingService.calculatePricing(
+            plan = plan,
+            billingCycle = dto.billingCycle,
+            regionAddonId = dto.region,
+            selectedAddonIds = dto.addons,
+        )
 
-        val planAddons = (plan.availableAddons as? com.fasterxml.jackson.databind.node.ArrayNode)
-            ?.map { objectMapper.treeToValue(it, PlanAddon::class.java) }
-            ?: emptyList()
-
-        val addonEntries = dto.addons.mapNotNull { addonId ->
-            val planAddon = planAddons.find { it.id == addonId } ?: return@mapNotNull null
-            val effectivePrice = planAddon.regionPrices[dto.region] ?: planAddon.priceMonthly
-            val meta: AddonCatalog? = addonCatalogRepository.findById(addonId).orElse(null)
-            QuoteAddonEntry(
-                id = addonId,
-                label = planAddon.label ?: meta?.label,
-                priceMonthly = effectivePrice,
-            )
+        val planAddons = pricingService.parsePlanAddons(plan)
+        val enrichedAddons = pricing.addonEntries.map { entry ->
+            val meta: AddonCatalog? = addonCatalogRepository.findById(entry.id).orElse(null)
+            val planAddon = planAddons.find { it.id == entry.id }
+            entry.copy(label = entry.label ?: planAddon?.label ?: meta?.label)
         }
-
-        val addonsMonthly = addonEntries.sumOf { it.priceMonthly }
-        val totalMonthly = baseMonthly.toDouble() + addonsMonthly
-        val subtotal = BigDecimal.valueOf(totalMonthly * dto.billingCycle)
-            .setScale(2, RoundingMode.HALF_UP)
-        val total = subtotal.add(setupFee).setScale(2, RoundingMode.HALF_UP)
 
         return QuoteResponse(
-            baseMonthly = baseMonthly,
-            addons = addonEntries,
-            addonsMonthly = addonsMonthly,
-            totalMonthly = totalMonthly,
-            setupFee = setupFee,
+            baseMonthly = pricing.baseMonthly,
+            addons = enrichedAddons,
+            addonsMonthly = pricing.addonsMonthly,
+            totalMonthly = pricing.totalMonthly,
+            setupFee = pricing.setupFee,
             billingCycle = dto.billingCycle,
-            subtotal = subtotal,
-            total = total,
+            subtotal = pricing.subtotal,
+            total = pricing.total,
         )
     }
 }

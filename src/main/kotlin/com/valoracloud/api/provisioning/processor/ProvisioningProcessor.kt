@@ -8,6 +8,7 @@ import com.valoracloud.api.config.*
 import com.valoracloud.api.contabo.ContaboService
 import com.valoracloud.api.entity.Server
 import com.valoracloud.api.notifications.service.NotificationsService
+import com.valoracloud.api.provisioning.ContaboProvisioningResolver
 import com.valoracloud.api.provisioning.service.ProvisioningService
 import com.valoracloud.api.provisioning.service.ProvisioningTxHelper
 import java.security.SecureRandom
@@ -147,9 +148,8 @@ runcmd: []
             val displayName = hostname ?: "srv-${orderId.take(8)}"
 
             // Resolve Region
-            val region = addonCatalogRepo.findById(regionAddonId).orElse(null)?.contaboValue
-                    ?: throw RuntimeException("Unknown region addon ID: $regionAddonId")
-            
+            val regionCatalog = addonCatalogRepo.findById(regionAddonId).orElse(null)
+            val region = ContaboProvisioningResolver.resolveRegion(regionAddonId, regionCatalog)
             log.info("Resolved Region \"$regionAddonId\" → $region")
 
             // Resolve OS image
@@ -177,34 +177,31 @@ runcmd: []
             val isWindowsImage = image.name.contains("windows", ignoreCase = true)
                     || image.osType?.equals("Windows", ignoreCase = true) == true
 
-            val storageAddon = order.addons.firstOrNull { it.startsWith("storage-") }
-            val storageType = when {
-                storageAddon == null -> "nvme"
-                storageAddon.contains("ssd") -> "ssd"
-                storageAddon.contains("storage") -> "storage"
-                else -> "nvme"
-            }
+            val planEntity = plan ?: throw RuntimeException("Plan not found for order $orderId")
 
-            val contaboPlanId = when {
-                storageType == "ssd" && !plan?.contaboPlanIdSsd.isNullOrBlank() -> {
-                    log.info("SSD storage addon — using SSD productId: ${plan!!.contaboPlanIdSsd}")
-                    plan.contaboPlanIdSsd!!
-                }
-                storageType == "storage" && !plan?.contaboPlanIdStorage.isNullOrBlank() -> {
-                    log.info("Storage addon — using Storage productId: ${plan!!.contaboPlanIdStorage}")
-                    plan.contaboPlanIdStorage!!
-                }
-                else -> {
-                    val id = plan?.contaboPlanId
-                        ?: throw RuntimeException("Plan has no contaboPlanId configured for order $orderId")
-                    if (storageType == "ssd" && plan.contaboPlanIdSsd.isNullOrBlank())
-                        log.warn("SSD storage selected but plan.contaboPlanIdSsd is not set — falling back to NVMe productId $id")
-                    if (storageType == "storage" && plan.contaboPlanIdStorage.isNullOrBlank())
-                        log.warn("Storage addon selected but plan.contaboPlanIdStorage is not set — falling back to NVMe productId $id")
-                    id
+            val storageAddon = order.addons.firstOrNull { it.startsWith("storage-") }
+
+            val contaboPlanId = ContaboProvisioningResolver.resolveProductId(planEntity, storageAddon)
+
+            if (storageAddon != null) {
+                val storageType = ContaboProvisioningResolver.resolveStorageType(storageAddon)
+                when (storageType) {
+                    com.valoracloud.api.provisioning.StorageType.SSD ->
+                        if (planEntity.contaboPlanIdSsd.isNullOrBlank())
+                            log.warn("SSD storage selected but plan.contaboPlanIdSsd is not set — falling back to NVMe productId $contaboPlanId")
+                    com.valoracloud.api.provisioning.StorageType.STORAGE ->
+                        if (planEntity.contaboPlanIdStorage.isNullOrBlank())
+                            log.warn("Storage addon selected but plan.contaboPlanIdStorage is not set — falling back to NVMe productId $contaboPlanId")
+                    else -> Unit
                 }
             }
             log.info("Contabo productId=$contaboPlanId  storageAddon=$storageAddon  windows=$isWindowsImage")
+
+            val catalogById = addonCatalogRepo.findAll().associateBy { it.id }
+            val contaboAddOns = ContaboProvisioningResolver.resolveContaboAddOns(order.addons, catalogById)
+            if (contaboAddOns != null) {
+                log.info("Contabo addOns for order $orderId: privateNetworking=${contaboAddOns.privateNetworking != null}, backup=${contaboAddOns.backup != null}")
+            }
 
             // defaultUser is determined by OS type, not by order.sshUser.
             // Contabo allowed values: "admin" | "root" (Linux) — "admin" | "administrator" (Windows)
@@ -272,6 +269,7 @@ runcmd: []
                             rootPassword = secretId,
                             userData = cloudInitB64,
                             defaultUser = sshUser,
+                            addOns = contaboAddOns,
                     )
             log.info("Cloud-init chpasswd for user=$sshUser injected (order $orderId)")
 
@@ -364,7 +362,10 @@ runcmd: []
             server.provisionedAt = if (postProvisionOk) Instant.now() else null
             serverRepo.save(server)
 
-            // Auto-create ServerMonitor
+            // Auto-create ServerMonitor (enhanced interval when monitoring addon purchased)
+            val monitoringEnabled =
+                    ContaboProvisioningResolver.isMonitoringEnabled(order.addons, catalogById)
+            val monitorInterval = if (monitoringEnabled) 30 else 60
             runCatching {
                 serverMonitorRepo.findByServerId(serverId).let { existing ->
                     if (existing == null) {
@@ -374,13 +375,38 @@ runcmd: []
                                         isActive = true,
                                         protocol = "tcp",
                                         checkPort = 22,
-                                        checkIntervalSeconds = 60,
+                                        checkIntervalSeconds = monitorInterval,
                                 )
                         )
                     } else {
                         existing.isActive = true
+                        existing.checkIntervalSeconds = monitorInterval
                         serverMonitorRepo.save(existing)
                     }
+                }
+            }
+
+            // Bundled object storage (VPS add-on → separate Contabo object storage product)
+            val bundleSpec =
+                    ContaboProvisioningResolver.resolveObjectStorageBundle(order.addons, catalogById)
+            if (bundleSpec != null && postProvisionOk) {
+                runCatching {
+                    provisionBundledObjectStorage(
+                            orderId = orderId,
+                            userId = userId,
+                            serverId = serverId!!,
+                            region = region,
+                            billingCycle = billingCycle,
+                            bundleSpec = bundleSpec,
+                    )
+                }.onFailure { e ->
+                    log.warn("Bundled object storage failed for order $orderId: ${e.message}")
+                    provisioningService.logEvent(
+                            serverId,
+                            "bundled-object-storage",
+                            "error",
+                            e.message,
+                    )
                 }
             }
 
@@ -441,6 +467,54 @@ runcmd: []
     }
 
     // ─── Object Storage Provisioning ────────────────────
+
+    private fun provisionBundledObjectStorage(
+            orderId: String,
+            userId: String,
+            serverId: String,
+            region: String,
+            billingCycle: Int,
+            bundleSpec: com.valoracloud.api.provisioning.ObjectStorageBundleSpec,
+    ) {
+        if (objectStorageRepo.findByServerId(serverId) != null) {
+            log.info("Bundled object storage already exists for server $serverId")
+            return
+        }
+
+        val displayName = "bundle-${orderId.take(8)}"
+        val contaboStorage =
+                contabo.createObjectStorage(
+                        region,
+                        bundleSpec.totalPurchasedSpaceTB,
+                        displayName,
+                )
+        val credentials = contabo.getS3Credentials(userId)
+
+        objectStorageRepo.save(
+                com.valoracloud.api.entity.ObjectStorage(
+                        userId = userId,
+                        orderId = orderId,
+                        serverId = serverId,
+                        contaboStorageId = contaboStorage.objectStorageId,
+                        status = com.valoracloud.api.common.model.ObjectStorageStatus.READY,
+                        displayName = displayName,
+                        region = region,
+                        totalPurchasedSpaceTB = bundleSpec.totalPurchasedSpaceTB,
+                        s3Endpoint = credentials.s3Url,
+                        s3AccessKey = encrypt(credentials.accessKey),
+                        s3SecretKey = encrypt(credentials.secretKey),
+                        provisionedAt = Instant.now(),
+                        expiresAt = calculateExpiry(billingCycle),
+                )
+        )
+        provisioningService.logEvent(
+                serverId,
+                "bundled-object-storage",
+                "success",
+                "${bundleSpec.totalPurchasedSpaceTB} TB provisioned (${bundleSpec.addonId})",
+        )
+        log.info("Bundled object storage ${contaboStorage.objectStorageId} linked to server $serverId")
+    }
 
     fun provisionObjectStorage(data: ProvisionJobData) {
         val orderId = data.orderId

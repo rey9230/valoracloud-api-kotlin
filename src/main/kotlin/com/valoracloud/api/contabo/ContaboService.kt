@@ -279,6 +279,8 @@ class ContaboService(
         rootPassword: Long? = null,
         userData: String? = null,
         defaultUser: String = "admin",
+        license: String? = null,
+        addOns: ContaboCreateInstanceAddOns? = null,
     ): ContaboInstance {
         val req = ContaboCreateInstanceRequest(
             imageId = imageId,
@@ -289,6 +291,8 @@ class ContaboService(
             rootPassword = rootPassword,
             userData = userData,
             defaultUser = defaultUser,
+            license = license,
+            addOns = addOns,
         )
         return apiRequestSingle(HttpMethod.POST, "/compute/instances", req, ContaboInstance::class.java)
     }

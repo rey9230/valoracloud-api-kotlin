@@ -52,6 +52,8 @@ class AdminService(
         private val provisioningLogRepo: ProvisioningLogRepository,
         private val addonCatalogRepo: AddonCatalogRepository,
         private val contabo: ContaboService,
+        private val marginPricingService: com.valoracloud.api.plans.MarginPricingService,
+        private val pricingService: com.valoracloud.api.plans.PricingService,
         private val jwt: JwtProvider,
         private val notifications: NotificationsService,
         @Value("\${app.encryption-key}") private val encryptionKey: String,
@@ -900,7 +902,11 @@ class AdminService(
                             setup12Months = dto.setup12Months,
                             priceMonthly = dto.price1Month,
                             contaboPlanId = dto.contaboPlanId,
+                            contaboPlanIdSsd = dto.contaboPlanIdSsd,
+                            contaboPlanIdStorage = dto.contaboPlanIdStorage,
+                            contaboPlanIdWindows = dto.contaboPlanIdWindows,
                             contaboCostPrice = dto.contaboCostPrice,
+                            marginPercent = dto.marginPercent,
                             regions = mapper.valueToTree(dto.regions ?: emptyList<String>()),
                             availableAddons = mapper.valueToTree(dto.availableAddons ?: emptyList<String>()),
                             storageTB = dto.storageTB,
@@ -934,7 +940,11 @@ class AdminService(
         dto.setup6Months?.let { plan.setup6Months = it }
         dto.setup12Months?.let { plan.setup12Months = it }
         dto.contaboPlanId?.let { plan.contaboPlanId = it }
+        dto.contaboPlanIdSsd?.let { plan.contaboPlanIdSsd = it }
+        dto.contaboPlanIdStorage?.let { plan.contaboPlanIdStorage = it }
+        dto.contaboPlanIdWindows?.let { plan.contaboPlanIdWindows = it }
         dto.contaboCostPrice?.let { plan.contaboCostPrice = it }
+        dto.marginPercent?.let { plan.marginPercent = it }
         dto.regions?.let { plan.regions = mapper.valueToTree(it) }
         dto.availableAddons?.let { plan.availableAddons = mapper.valueToTree(it) }
         dto.storageTB?.let { plan.storageTB = it }
@@ -987,6 +997,66 @@ class AdminService(
         return mapOf("planId" to planId, "addonId" to addonId, "updated" to addons[idx])
     }
 
+    fun suggestPlanPrices(planId: String, dto: SuggestPlanPricesDto): Map<String, Any?> {
+        val plan = planRepo.findByIdOrNull(planId) ?: throw NotFoundException("Plan", planId)
+        val cost = dto.contaboCostPrice ?: plan.contaboCostPrice
+            ?: throw BadRequestException("contaboCostPrice is required (set on plan or in request body)")
+        val margin = dto.marginPercent ?: plan.marginPercent ?: marginPricingService.defaultMarginPercent()
+        val suggested = marginPricingService.suggestPlanPrices(cost, margin)
+        return mapOf(
+            "planId" to planId,
+            "contaboCostPrice" to cost,
+            "marginPercent" to margin,
+            "suggested" to suggested,
+        )
+    }
+
+    fun applySuggestedPlanPrices(planId: String, dto: ApplyPlanPricesDto): Plan {
+        val plan = planRepo.findByIdOrNull(planId) ?: throw NotFoundException("Plan", planId)
+        val cost = dto.contaboCostPrice ?: plan.contaboCostPrice
+            ?: throw BadRequestException("contaboCostPrice is required")
+        val margin = dto.marginPercent ?: plan.marginPercent ?: marginPricingService.defaultMarginPercent()
+        val suggested = marginPricingService.suggestPlanPrices(cost, margin)
+
+        plan.contaboCostPrice = cost
+        plan.marginPercent = margin
+        plan.price1Month = suggested.price1Month
+        plan.price6Months = suggested.price6Months
+        plan.price12Months = suggested.price12Months
+        plan.priceMonthly = suggested.price1Month
+
+        if (dto.applyAddons) {
+            applyMarginToPlanAddonsInternal(plan, margin)
+        }
+
+        return planRepo.save(plan)
+    }
+
+    private fun applyMarginToPlanAddonsInternal(plan: Plan, marginPercent: BigDecimal) {
+        val catalog = addonCatalogRepo.findAll().associateBy { it.id }
+        val planAddons = pricingService.parsePlanAddons(plan)
+        if (planAddons.isEmpty()) return
+
+        val updated = planAddons.map { addon ->
+            val cost = catalog[addon.id]?.contaboCostPrice ?: return@map addon
+            val retail = marginPricingService.suggestAddonPrice(cost, marginPercent)
+            addon.copy(priceMonthly = retail.toDouble())
+        }
+        plan.availableAddons = mapper.valueToTree(updated)
+    }
+
+    fun applyMarginToPlanAddons(planId: String, dto: SuggestPlanPricesDto): Map<String, Any?> {
+        val plan = planRepo.findByIdOrNull(planId) ?: throw NotFoundException("Plan", planId)
+        val margin = dto.marginPercent ?: plan.marginPercent ?: marginPricingService.defaultMarginPercent()
+        applyMarginToPlanAddonsInternal(plan, margin)
+        planRepo.save(plan)
+        return mapOf(
+            "planId" to planId,
+            "marginPercent" to margin,
+            "addons" to pricingService.parsePlanAddons(plan),
+        )
+    }
+
     // ════════════════════════════════════════════════════════════
     // Addon Catalog
     // ════════════════════════════════════════════════════════════
@@ -1002,6 +1072,7 @@ class AdminService(
                 category = dto.category,
                 label = dto.label,
                 contaboValue = dto.contaboValue,
+                contaboCostPrice = dto.contaboCostPrice,
                 billingType = dto.billingType,
                 isDefault = dto.isDefault,
                 sortOrder = dto.sortOrder,
@@ -1014,6 +1085,7 @@ class AdminService(
         dto.category?.let { addon.category = it }
         dto.label?.let { addon.label = it }
         dto.contaboValue?.let { addon.contaboValue = it }
+        dto.contaboCostPrice?.let { addon.contaboCostPrice = it }
         dto.billingType?.let { addon.billingType = it }
         dto.isDefault?.let { addon.isDefault = it }
         dto.sortOrder?.let { addon.sortOrder = it }

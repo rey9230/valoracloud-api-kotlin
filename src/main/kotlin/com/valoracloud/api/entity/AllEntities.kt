@@ -354,6 +354,7 @@ class Plan(
         @Column(name = "contaboPlanIdStorage") var contaboPlanIdStorage: String? = null,
         @Column(name = "contaboPlanIdWindows") var contaboPlanIdWindows: String? = null,
         @Column(name = "contaboCostPrice", precision = 10, scale = 2) var contaboCostPrice: BigDecimal? = null,
+        @Column(name = "marginPercent", precision = 5, scale = 2) var marginPercent: BigDecimal? = null,
         @JdbcTypeCode(SqlTypes.JSON) @Column(name = "regions", columnDefinition = "jsonb") var regions: com.fasterxml.jackson.databind.JsonNode = com.fasterxml.jackson.databind.node.NullNode.instance,
         @JdbcTypeCode(SqlTypes.JSON) @Column(name = "availableAddons", columnDefinition = "jsonb") var availableAddons: com.fasterxml.jackson.databind.JsonNode = com.fasterxml.jackson.databind.node.NullNode.instance,
         @Column(name = "storageTB") var storageTB: Double? = null,
@@ -465,7 +466,8 @@ class WebhookEvent(
 class ObjectStorage(
         @Id var id: String = cuid(),
         @Column(name = "userId", nullable = false) var userId: String = "",
-        @Column(name = "orderId", unique = true, nullable = false) var orderId: String = "",
+        @Column(name = "orderId", nullable = false) var orderId: String = "",
+        @Column(name = "serverId") var serverId: String? = null,
         @Column(name = "contaboStorageId", unique = true) var contaboStorageId: String = "",
         @Type(ObjectStorageStatusUserType::class) @Column(name = "status")
         var status: ObjectStorageStatus = ObjectStorageStatus.PROVISIONING,
@@ -834,6 +836,7 @@ class AddonCatalog(
         @Column(nullable = false) var category: String = "",
         @Column(nullable = false) var label: String = "",
         @Column(name = "contabo_value") var contaboValue: String? = null,
+        @Column(name = "contabo_cost_price", precision = 10, scale = 2) var contaboCostPrice: BigDecimal? = null,
         @Column(name = "billing_type") var billingType: String = "monthly_recurring",
         @Column(name = "is_default") var isDefault: Boolean = false,
         @Column(name = "sort_order") var sortOrder: Int = 0,
