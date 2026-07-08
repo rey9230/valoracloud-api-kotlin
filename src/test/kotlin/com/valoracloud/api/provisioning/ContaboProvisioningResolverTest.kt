@@ -2,6 +2,7 @@ package com.valoracloud.api.provisioning
 
 import com.valoracloud.api.entity.AddonCatalog
 import com.valoracloud.api.entity.Plan
+import com.valoracloud.api.plans.ImageLicenseResolver
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -93,6 +94,31 @@ class ContaboProvisioningResolverTest {
             ),
         )
         assertEquals(false, enabled)
+    }
+
+    @Test
+    fun `resolveLicense maps legacy image-cpanel addon`() {
+        val license = ContaboProvisioningResolver.resolveLicense(
+            listOf("region-eu", ImageLicenseResolver.LEGACY_CPANEL),
+            emptyMap(),
+        )
+        assertEquals("cPanel30", license)
+    }
+
+    @Test
+    fun `resolveLicense maps license addon to contabo value`() {
+        val license = ContaboProvisioningResolver.resolveLicense(
+            listOf("region-eu", ImageLicenseResolver.ADDON_CPANEL),
+            catalog(
+                AddonCatalog(
+                    id = ImageLicenseResolver.ADDON_CPANEL,
+                    category = "license",
+                    label = "cPanel",
+                    contaboValue = "cPanel30",
+                ),
+            ),
+        )
+        assertEquals("cPanel30", license)
     }
 
     @Test

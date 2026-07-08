@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.valoracloud.api.common.config.PlanAddon
 import com.valoracloud.api.common.exceptions.BadRequestException
+import com.valoracloud.api.config.AddonCatalogRepository
 import com.valoracloud.api.entity.Plan
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -12,6 +13,8 @@ import org.springframework.stereotype.Service
 @Service
 class PricingService(
     private val objectMapper: ObjectMapper,
+    private val addonCatalogRepository: AddonCatalogRepository,
+    private val marginPricingService: MarginPricingService,
 ) {
     fun parsePlanAddons(plan: Plan): List<PlanAddon> =
         (plan.availableAddons as? ArrayNode)
@@ -43,19 +46,36 @@ class PricingService(
         billingCycle: Int,
         regionAddonId: String,
         selectedAddonIds: List<String>,
+        imageId: String? = null,
+        imageLabel: String? = null,
     ): OrderPricing {
         val baseMonthly = getBaseMonthly(plan, billingCycle)
         val setupFee = getSetupFee(plan, billingCycle)
         val planAddons = parsePlanAddons(plan)
+        val planAddonIds = planAddons.map { it.id }.toSet()
 
-        val billableAddonIds = buildBillableAddonIds(regionAddonId, selectedAddonIds)
+        val imageAddonId = ImageLicenseResolver.resolveBillableAddonId(imageId, imageLabel, planAddonIds)
+        val mergedAddonIds = buildList {
+            addAll(selectedAddonIds)
+            if (imageAddonId != null && !contains(imageAddonId)) add(imageAddonId)
+        }
+
+        val billableAddonIds = buildBillableAddonIds(regionAddonId, mergedAddonIds)
+        val catalogById = addonCatalogRepository.findAll().associateBy { it.id }
         val addonEntries = billableAddonIds.mapNotNull { addonId ->
-            val planAddon = planAddons.find { it.id == addonId } ?: return@mapNotNull null
-            val effectivePrice = planAddon.regionPrices[regionAddonId] ?: planAddon.priceMonthly
+            val effectivePrice = resolveEffectiveAddonMonthlyPrice(
+                addonId = addonId,
+                plan = plan,
+                planAddons = planAddons,
+                regionAddonId = regionAddonId,
+                catalogById = catalogById,
+            ) ?: return@mapNotNull null
+            val planAddon = planAddons.find { it.id == addonId }
+            val label = planAddon?.label ?: catalogById[addonId]?.label
             QuoteAddonEntry(
                 id = addonId,
-                label = planAddon.label,
-                priceMonthly = effectivePrice,
+                label = label,
+                priceMonthly = effectivePrice.toDouble(),
             )
         }
 
@@ -84,6 +104,28 @@ class PricingService(
         if (regionAddonId.isNotBlank()) ids.add(regionAddonId)
         selectedAddonIds.filter { it.isNotBlank() && it != regionAddonId }.forEach { ids.add(it) }
         return ids.toList()
+    }
+
+    /**
+     * Plan retail price first; fallback to catalog wholesale + plan margin for license/catalog addons.
+     */
+    fun resolveEffectiveAddonMonthlyPrice(
+        addonId: String,
+        plan: Plan,
+        planAddons: List<PlanAddon>,
+        regionAddonId: String,
+        catalogById: Map<String, com.valoracloud.api.entity.AddonCatalog>,
+    ): BigDecimal? {
+        val planAddon = planAddons.find { it.id == addonId }
+        if (planAddon != null) {
+            return planAddon.regionPrices[regionAddonId]?.let { BigDecimal.valueOf(it) }
+                ?: BigDecimal.valueOf(planAddon.priceMonthly)
+        }
+        val cost = catalogById[addonId]?.contaboCostPrice
+        if (cost != null && cost > BigDecimal.ZERO) {
+            return marginPricingService.suggestAddonPrice(cost, plan.marginPercent)
+        }
+        return null
     }
 }
 

@@ -41,6 +41,8 @@ data class CreateOrderDto(
     @field:NotBlank
     val imageId: String,
 
+    val imageLabel: String? = null,
+
     @field:Size(max = 10)
     val addons: List<String> = emptyList(),
 

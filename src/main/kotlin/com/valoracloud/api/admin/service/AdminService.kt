@@ -1038,9 +1038,17 @@ class AdminService(
         if (planAddons.isEmpty()) return
 
         val updated = planAddons.map { addon ->
-            val cost = catalog[addon.id]?.contaboCostPrice ?: return@map addon
+            val cost = catalog[addon.id]?.contaboCostPrice
+            if (cost == null || cost <= BigDecimal.ZERO) return@map addon
             val retail = marginPricingService.suggestAddonPrice(cost, marginPercent)
-            addon.copy(priceMonthly = retail.toDouble())
+            val category = catalog[addon.id]?.category
+            val regionPrices =
+                if (category == "region") {
+                    addon.regionPrices.toMutableMap().apply { this[addon.id] = retail.toDouble() }
+                } else {
+                    addon.regionPrices
+                }
+            addon.copy(priceMonthly = retail.toDouble(), regionPrices = regionPrices)
         }
         plan.availableAddons = mapper.valueToTree(updated)
     }

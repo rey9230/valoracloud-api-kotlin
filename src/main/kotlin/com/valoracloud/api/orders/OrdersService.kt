@@ -1,8 +1,8 @@
 package com.valoracloud.api.orders
 
 import com.stripe.Stripe
-import com.stripe.model.PaymentIntent
-import com.stripe.param.PaymentIntentCreateParams
+import com.stripe.model.checkout.Session
+import com.stripe.param.checkout.SessionCreateParams
 import com.valoracloud.api.billing.service.ProvisionJobData
 import com.valoracloud.api.common.dto.PaginatedResponse
 import com.valoracloud.api.common.dto.PaginationDto
@@ -33,6 +33,7 @@ class OrdersService(
     @Value("\${stripe.enabled:true}") private val stripeEnabled: Boolean,
     @Value("\${stripe.secret-key:}") private val stripeSecretKey: String,
     @Value("\${app.encryption-key:}") private val encryptionKey: String,
+    @Value("\${app.frontend-url:}") private val frontendUrl: String,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -50,6 +51,8 @@ class OrdersService(
             billingCycle = dto.billingCycle,
             regionAddonId = dto.region,
             selectedAddonIds = dto.addons,
+            imageId = dto.imageId,
+            imageLabel = dto.imageLabel,
         )
 
         val storedPassword = if (encryptionKey.isNotBlank())
@@ -98,22 +101,49 @@ class OrdersService(
             return CheckoutResponse(orderId = order.id, status = "auto_approved")
         }
 
-        // Create Stripe PaymentIntent
+        // Create a Stripe Checkout Session (hosted payment page).
+        // orderId/userId are attached to the underlying PaymentIntent so the
+        // existing `payment_intent.succeeded` webhook keeps working unchanged.
         val amountCents = pricing.total.multiply(BigDecimal(100)).toLong()
-        val intent = PaymentIntent.create(
-            PaymentIntentCreateParams.builder()
-                .setAmount(amountCents)
-                .setCurrency("usd")
+        val baseUrl = frontendUrl.trimEnd('/').ifBlank { "https://valoracloud.com" }
+        val session = Session.create(
+            SessionCreateParams.builder()
+                .setMode(SessionCreateParams.Mode.PAYMENT)
+                .setSuccessUrl("$baseUrl/checkout/success?order=${order.id}")
+                .setCancelUrl("$baseUrl/checkout/cancel?order=${order.id}")
                 .putMetadata("orderId", order.id)
                 .putMetadata("userId", userId)
+                .setPaymentIntentData(
+                    SessionCreateParams.PaymentIntentData.builder()
+                        .putMetadata("orderId", order.id)
+                        .putMetadata("userId", userId)
+                        .build()
+                )
+                .addLineItem(
+                    SessionCreateParams.LineItem.builder()
+                        .setQuantity(1L)
+                        .setPriceData(
+                            SessionCreateParams.LineItem.PriceData.builder()
+                                .setCurrency("usd")
+                                .setUnitAmount(amountCents)
+                                .setProductData(
+                                    SessionCreateParams.LineItem.PriceData.ProductData.builder()
+                                        .setName(plan.name.ifBlank { "VALORA Cloud order" })
+                                        .build()
+                                )
+                                .build()
+                        )
+                        .build()
+                )
                 .build()
         )
-        order.stripePaymentId = intent.id
+        order.stripePaymentId = session.paymentIntent ?: session.id
         orderRepository.save(order)
 
         return CheckoutResponse(
             orderId = order.id,
-            clientSecret = intent.clientSecret,
+            clientSecret = null,
+            checkoutUrl = session.url,
             status = "pending_payment",
         )
     }
@@ -183,4 +213,5 @@ data class CheckoutResponse(
     val orderId: String,
     val status: String,
     val clientSecret: String? = null,
+    val checkoutUrl: String? = null,
 )

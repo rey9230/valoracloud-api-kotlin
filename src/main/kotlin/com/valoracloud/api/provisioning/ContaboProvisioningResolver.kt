@@ -3,6 +3,7 @@ package com.valoracloud.api.provisioning
 import com.valoracloud.api.contabo.ContaboCreateInstanceAddOns
 import com.valoracloud.api.entity.AddonCatalog
 import com.valoracloud.api.entity.Plan
+import com.valoracloud.api.plans.ImageLicenseResolver
 
 enum class StorageType {
     NVME,
@@ -116,5 +117,16 @@ object ContaboProvisioningResolver {
             backup = if (backup) emptyMap() else null,
             extraStorage = if (extraStorage) emptyMap() else null,
         )
+    }
+
+    /** Contabo create-instance `license` value from billed addon ids. */
+    fun resolveLicense(
+        addonIds: List<String>,
+        catalogById: Map<String, AddonCatalog>,
+    ): String? {
+        for (addonId in addonIds) {
+            ImageLicenseResolver.resolveContaboLicenseValue(addonId, catalogById)?.let { return it }
+        }
+        return null
     }
 }

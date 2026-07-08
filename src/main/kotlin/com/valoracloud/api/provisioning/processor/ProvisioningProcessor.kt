@@ -199,8 +199,12 @@ runcmd: []
 
             val catalogById = addonCatalogRepo.findAll().associateBy { it.id }
             val contaboAddOns = ContaboProvisioningResolver.resolveContaboAddOns(order.addons, catalogById)
+            val license = ContaboProvisioningResolver.resolveLicense(order.addons, catalogById)
             if (contaboAddOns != null) {
                 log.info("Contabo addOns for order $orderId: privateNetworking=${contaboAddOns.privateNetworking != null}, backup=${contaboAddOns.backup != null}")
+            }
+            if (license != null) {
+                log.info("Contabo license for order $orderId: $license")
             }
 
             // defaultUser is determined by OS type, not by order.sshUser.
@@ -269,6 +273,7 @@ runcmd: []
                             rootPassword = secretId,
                             userData = cloudInitB64,
                             defaultUser = sshUser,
+                            license = license,
                             addOns = contaboAddOns,
                     )
             log.info("Cloud-init chpasswd for user=$sshUser injected (order $orderId)")

@@ -22,6 +22,7 @@ class PlansService(
     private val objectMapper: ObjectMapper,
     private val addonCatalogRepository: AddonCatalogRepository,
     private val pricingService: PricingService,
+    private val marginPricingService: MarginPricingService,
 ) {
     fun findAll(productType: String? = null): List<Plan> {
         return if (productType != null) {
@@ -71,7 +72,34 @@ class PlansService(
             )
         }
 
-        planMap["availableAddons"] = enrichedAddons
+        val planAddonIds = availableAddonsFromPlan.map { it.id }.toSet()
+        val hasLegacyPanelAddons = planAddonIds.any {
+            it == ImageLicenseResolver.LEGACY_CPANEL ||
+                it == ImageLicenseResolver.LEGACY_PLESK_LINUX ||
+                it == ImageLicenseResolver.LEGACY_PLESK_WINDOWS
+        }
+
+        val licenseAddons = if (hasLegacyPanelAddons) {
+            emptyList()
+        } else {
+            addonCatalogRepository.findAll()
+                .filter { it.category == "license" && (it.contaboCostPrice ?: BigDecimal.ZERO) > BigDecimal.ZERO }
+                .filter { !planAddonIds.contains(it.id) }
+                .map { catalog ->
+                    mapOf(
+                        "id" to catalog.id,
+                        "priceMonthly" to marginPricingService
+                            .suggestAddonPrice(catalog.contaboCostPrice!!, plan.marginPercent)
+                            .toDouble(),
+                        "regionPrices" to emptyMap<String, Double>(),
+                        "label" to catalog.label,
+                        "category" to catalog.category,
+                        "billingType" to (catalog.billingType ?: "monthly_recurring"),
+                    )
+                }
+        }
+
+        planMap["availableAddons"] = enrichedAddons + licenseAddons
         planMap["imageAddons"] = dynamicImageAddons
         planMap.remove("addons")
 
@@ -95,6 +123,8 @@ class PlansService(
             billingCycle = dto.billingCycle,
             regionAddonId = dto.region,
             selectedAddonIds = dto.addons,
+            imageId = dto.imageId,
+            imageLabel = dto.imageLabel,
         )
 
         val planAddons = pricingService.parsePlanAddons(plan)
@@ -122,6 +152,7 @@ data class QuoteRequestDto(
     val addons: List<String> = emptyList(),
     val billingCycle: Int,
     val imageId: String? = null,
+    val imageLabel: String? = null,
 )
 
 data class QuoteAddonEntry(
