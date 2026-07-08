@@ -42,6 +42,7 @@ class ProvisioningProcessor(
         private val serverMonitorRepo: ServerMonitorRepository,
         private val domainTldPricingRepo: DomainTldPricingRepository,
         private val addonCatalogRepo: AddonCatalogRepository,
+        private val secretRepo: SecretRepository,
         @Value("\${app.encryption-key:}") private val encryptionKey: String,
         @Value("\${app.brand.domain:valoracloud.com}") private val brandDomain: String,
         @Value("\${app.provisioning.dry-run:false}") private val dryRun: Boolean,
@@ -262,6 +263,21 @@ runcmd: []
                 else -> 1L
             }
 
+            val sshKeyContaboIds = order.sshKeyId?.let { keyId ->
+                secretRepo.findById(keyId).orElse(null)?.let { secret ->
+                    if (secret.type == "ssh" && secret.contaboId > 0) {
+                        listOf(secret.contaboId.toLong())
+                    } else null
+                }
+            }
+            if (order.sshKeyId != null) {
+                if (sshKeyContaboIds.isNullOrEmpty()) {
+                    log.warn("Order $orderId has sshKeyId=${order.sshKeyId} but no Contabo SSH secret id — instance will not receive the key")
+                } else {
+                    log.info("Contabo sshKeys for order $orderId: $sshKeyContaboIds")
+                }
+            }
+
             // Create instance
             val instance =
                     contabo.createInstance(
@@ -271,6 +287,7 @@ runcmd: []
                             displayName = displayName,
                             period = period,
                             rootPassword = secretId,
+                            sshKeys = sshKeyContaboIds,
                             userData = cloudInitB64,
                             defaultUser = sshUser,
                             license = license,

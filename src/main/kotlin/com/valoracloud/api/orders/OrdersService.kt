@@ -30,6 +30,7 @@ class OrdersService(
     private val domainRepository: DomainRepository,
     private val provisioningProcessor: ProvisioningProcessor,
     private val pricingService: PricingService,
+    private val credentialsResolver: OrderCredentialsResolver,
     @Value("\${stripe.enabled:true}") private val stripeEnabled: Boolean,
     @Value("\${stripe.secret-key:}") private val stripeSecretKey: String,
     @Value("\${app.encryption-key:}") private val encryptionKey: String,
@@ -55,9 +56,11 @@ class OrdersService(
             imageLabel = dto.imageLabel,
         )
 
+        val credentials = credentialsResolver.resolve(userId, dto)
+
         val storedPassword = if (encryptionKey.isNotBlank())
-            EncryptionUtil.encrypt(dto.rootPassword, encryptionKey)
-        else dto.rootPassword
+            EncryptionUtil.encrypt(credentials.rootPassword, encryptionKey)
+        else credentials.rootPassword
 
         val imageId = dto.imageId ?: ""
         val isWindows = imageId.contains("windows", ignoreCase = true)
@@ -80,6 +83,7 @@ class OrdersService(
             rootPassword = storedPassword,
             hostname = dto.displayName,
             sshUser = sshUser,
+            sshKeyId = credentials.sshKeyId,
         ))
 
         // When Stripe is disabled, auto-approve and provision immediately
@@ -201,6 +205,7 @@ class OrdersService(
         os = os,
         addons = addons,
         sshUser = sshUser,
+        sshKeyId = sshKeyId,
         hostname = hostname,
         rootPassword = rootPassword,
         domainName = domain?.domainName,

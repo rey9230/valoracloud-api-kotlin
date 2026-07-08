@@ -386,6 +386,7 @@ class Order(
         var os: String = "ubuntu-24.04",
         @JdbcTypeCode(SqlTypes.JSON) var addons: List<String> = emptyList(),
         @Column(name = "sshUser") var sshUser: String = "root",
+        @Column(name = "sshKeyId") var sshKeyId: String? = null,
         var hostname: String? = null,
         @Column(name = "rootPassword") var rootPassword: String? = null,
 ) : BaseEntity()
