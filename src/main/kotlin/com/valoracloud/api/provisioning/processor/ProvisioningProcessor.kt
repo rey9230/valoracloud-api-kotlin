@@ -78,7 +78,7 @@ write_files:
 runcmd: []
         """.trimIndent()
 
-        fun buildCloudInit(rootPassword: String, sshUser: String = "admin"): String {
+        fun buildCloudInit(rootPassword: String, sshUser: String = "root"): String {
             val chpasswd = "chpasswd:\n  list: |\n    $sshUser:$rootPassword\n  expire: false\n\n"
             return CLOUD_INIT_BASE.replace("#cloud-config\n", "#cloud-config\n$chpasswd")
         }
@@ -210,7 +210,8 @@ runcmd: []
 
             // defaultUser is determined by OS type, not by order.sshUser.
             // Contabo allowed values: "admin" | "root" (Linux) — "admin" | "administrator" (Windows)
-            val sshUser = if (isWindowsImage) "administrator" else "admin"
+            // Business rule: Linux is ALWAYS root; only Windows uses administrator.
+            val sshUser = if (isWindowsImage) "administrator" else "root"
             log.info("defaultUser=$sshUser (windows=$isWindowsImage)")
 
             // Cloud-init

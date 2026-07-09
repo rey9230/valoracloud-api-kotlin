@@ -64,7 +64,8 @@ class OrdersService(
 
         val imageId = dto.imageId ?: ""
         val isWindows = imageId.contains("windows", ignoreCase = true)
-        val sshUser = if (isWindows) "administrator" else "admin"
+        // Business rule: Linux is ALWAYS root; only Windows uses administrator.
+        val sshUser = if (isWindows) "administrator" else "root"
 
         val order = orderRepository.save(Order(
             userId = userId,

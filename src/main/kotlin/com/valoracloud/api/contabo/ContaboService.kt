@@ -279,7 +279,8 @@ class ContaboService(
         rootPassword: Long? = null,
         sshKeys: List<Long>? = null,
         userData: String? = null,
-        defaultUser: String = "admin",
+        // Linux is always root; only Windows callers pass "administrator".
+        defaultUser: String = "root",
         license: String? = null,
         addOns: ContaboCreateInstanceAddOns? = null,
     ): ContaboInstance {
