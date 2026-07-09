@@ -2,15 +2,23 @@ package com.valoracloud.api.servers
 
 import com.valoracloud.api.common.dto.PaginatedResponse
 import com.valoracloud.api.common.dto.PaginationDto
+import com.valoracloud.api.common.exceptions.BadRequestException
 import com.valoracloud.api.common.exceptions.ForbiddenException
 import com.valoracloud.api.common.exceptions.NotFoundException
 import com.valoracloud.api.common.model.ServerStatus
+import com.valoracloud.api.common.utils.EncryptionUtil
 import com.valoracloud.api.config.ProvisioningLogRepository
 import com.valoracloud.api.config.ServerRepository
+import com.valoracloud.api.contabo.ContaboCreateSecretRequest
+import com.valoracloud.api.contabo.ContaboSecretType
 import com.valoracloud.api.contabo.ContaboService
 import com.valoracloud.api.entity.Server
 import com.valoracloud.api.notifications.service.NotificationsService
+import com.valoracloud.api.provisioning.ProvisioningDefaults
+import com.valoracloud.api.provisioning.processor.ProvisioningProcessor
+import java.util.Base64
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 
 @Service
@@ -19,6 +27,8 @@ class ServersService(
     private val provisioningLogRepository: ProvisioningLogRepository,
     private val contabo: ContaboService,
     private val notifications: NotificationsService,
+    private val provisioningProcessor: ProvisioningProcessor,
+    @Value("\${app.encryption-key:}") private val encryptionKey: String,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -125,7 +135,62 @@ class ServersService(
 
     fun reinstall(serverId: String, userId: String, imageId: String, password: String?): Map<String, String> {
         val server = getServerForAction(serverId, userId)
-        // TODO: Full reinstall flow with Contabo, post-provisioning SSH
+        if (server.status == ServerStatus.REINSTALLING) {
+            throw ForbiddenException("A reinstall is already in progress for this server")
+        }
+
+        // Password: use the one provided, or keep the current one
+        val newPassword = password?.trim()?.takeIf { it.isNotEmpty() }
+            ?: if (encryptionKey.isNotBlank()) EncryptionUtil.decrypt(server.rootPassword, encryptionKey)
+               else server.rootPassword
+        if (newPassword.length !in 8..72) {
+            throw BadRequestException("Password must be between 8 and 72 characters")
+        }
+
+        // Resolve the image to determine the login user (Linux → root, Windows → administrator)
+        val image = try {
+            contabo.getImage(imageId)
+        } catch (e: Exception) {
+            throw BadRequestException("Unknown image: $imageId")
+        }
+        val sshUser = ProvisioningDefaults.sshUserFor(ProvisioningDefaults.isWindows(image.name, image.osType))
+
+        // Contabo secret so the reinstall sets the password, plus cloud-init as belt-and-braces
+        var secretId: Long? = null
+        try {
+            val secret = contabo.createSecret(
+                ContaboCreateSecretRequest(
+                    name = "reinstall-${serverId.take(8)}",
+                    type = ContaboSecretType.password,
+                    value = newPassword,
+                )
+            )
+            secretId = secret.secretId
+        } catch (e: Exception) {
+            log.warn("Could not create reinstall secret: ${e.message}")
+        }
+        val cloudInitB64 = Base64.getEncoder().encodeToString(
+            ProvisioningProcessor.buildCloudInit(newPassword, sshUser).toByteArray()
+        )
+
+        contabo.reinstallInstance(
+            instanceId = server.contaboInstanceId.toLong(),
+            imageId = image.imageId,
+            rootPassword = secretId,
+            userData = cloudInitB64,
+            defaultUser = sshUser,
+        )
+
+        server.status = ServerStatus.REINSTALLING
+        server.os = image.imageId
+        server.sshUser = sshUser
+        server.rootPassword = if (encryptionKey.isNotBlank()) EncryptionUtil.encrypt(newPassword, encryptionKey) else newPassword
+        serverRepository.save(server)
+        log.info("Reinstall started for server $serverId → image=${image.name} user=$sshUser")
+
+        // Poll + finish asynchronously; the endpoint returns right away
+        provisioningProcessor.finalizeReinstall(serverId, secretId, newPassword)
+
         return mapOf("message" to "Server reinstall initiated")
     }
 

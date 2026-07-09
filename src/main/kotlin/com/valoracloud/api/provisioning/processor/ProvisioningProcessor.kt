@@ -93,6 +93,64 @@ runcmd: []
      * NOT @Transactional — provisioning takes 15-25 min; holding a DB
      * connection that long would exhaust the HikariCP pool.
      */
+    /**
+     * Finalizes a user-initiated reinstall: polls Contabo until the instance is
+     * running (max 15 min), flips the server status, cleans up the temporary
+     * password secret, and emails the customer. Runs async so the reinstall
+     * endpoint returns immediately.
+     */
+    @Async("provisioningExecutor")
+    fun finalizeReinstall(serverId: String, secretId: Long?, newPassword: String) {
+        val server = serverRepo.findById(serverId).orElse(null)
+        if (server == null) {
+            log.warn("finalizeReinstall: server $serverId not found")
+            return
+        }
+        var ready = false
+        try {
+            for (i in 0 until 30) {
+                Thread.sleep(30_000)
+                try {
+                    val inst = contabo.getInstance(server.contaboInstanceId.toLong())
+                    if (inst.status == "running") {
+                        ready = true
+                        break
+                    }
+                } catch (_: Exception) {
+                    /* poll again */
+                }
+            }
+        } finally {
+            secretId?.let {
+                runCatching { contabo.deleteSecret(it) }
+                        .onFailure { e -> log.warn("Could not delete reinstall secret: ${e.message}") }
+            }
+        }
+        server.status = if (ready) ServerStatus.RUNNING else ServerStatus.ERROR
+        server.provisionedAt = if (ready) Instant.now() else server.provisionedAt
+        serverRepo.save(server)
+        provisioningService.logEvent(
+                serverId,
+                "reinstall",
+                if (ready) "success" else "error",
+                if (ready) "Reinstall completed" else "Instance did not reach running state within 15 min",
+        )
+        if (ready) {
+            val user = userRepo.findById(server.userId).orElse(null)
+            if (user != null) {
+                runCatching {
+                    notifications.sendReinstallCompleteEmail(
+                            email = user.email,
+                            hostname = server.hostname,
+                            newPassword = newPassword,
+                            language = user.language,
+                            userId = user.id,
+                    )
+                }.onFailure { e -> log.error("Failed to send reinstall complete email: ${e.message}") }
+            }
+        }
+    }
+
     @Async("provisioningExecutor")
     fun provisionServer(data: ProvisionJobData) {
         val orderId = data.orderId

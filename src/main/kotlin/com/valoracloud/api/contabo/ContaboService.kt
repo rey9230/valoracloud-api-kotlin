@@ -320,10 +320,12 @@ class ContaboService(
         imageId: String,
         rootPassword: Long? = null,
         userData: String? = null,
+        defaultUser: String? = null,
     ) {
         val body = mutableMapOf<String, Any?>("imageId" to imageId)
         rootPassword?.let { body["rootPassword"] = it }
         userData?.let { body["userData"] = it }
+        defaultUser?.let { body["defaultUser"] = it }
         apiRequestVoid(HttpMethod.PUT, "/compute/instances/$instanceId", body)
     }
 
