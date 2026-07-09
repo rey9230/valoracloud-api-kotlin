@@ -1,8 +1,8 @@
 package com.valoracloud.api.orders
 
 import com.stripe.Stripe
-import com.stripe.model.checkout.Session
-import com.stripe.param.checkout.SessionCreateParams
+import com.stripe.model.PaymentIntent
+import com.stripe.param.PaymentIntentCreateParams
 import com.valoracloud.api.billing.service.ProvisionJobData
 import com.valoracloud.api.common.dto.PaginatedResponse
 import com.valoracloud.api.common.dto.PaginationDto
@@ -105,49 +105,24 @@ class OrdersService(
             return CheckoutResponse(orderId = order.id, status = "auto_approved")
         }
 
-        // Create a Stripe Checkout Session (hosted payment page).
-        // orderId/userId are attached to the underlying PaymentIntent so the
-        // existing `payment_intent.succeeded` webhook keeps working unchanged.
+        // Create a Stripe PaymentIntent so the storefront can render the embedded
+        // Stripe PaymentElement (matches the app design). orderId/userId metadata keep
+        // the existing `payment_intent.succeeded` webhook working unchanged.
         val amountCents = pricing.total.multiply(BigDecimal(100)).toLong()
-        val baseUrl = frontendUrl.trimEnd('/').ifBlank { "https://valoracloud.com" }
-        val session = Session.create(
-            SessionCreateParams.builder()
-                .setMode(SessionCreateParams.Mode.PAYMENT)
-                .setSuccessUrl("$baseUrl/checkout/success?order=${order.id}")
-                .setCancelUrl("$baseUrl/checkout/cancel?order=${order.id}")
+        val intent = PaymentIntent.create(
+            PaymentIntentCreateParams.builder()
+                .setAmount(amountCents)
+                .setCurrency("usd")
                 .putMetadata("orderId", order.id)
                 .putMetadata("userId", userId)
-                .setPaymentIntentData(
-                    SessionCreateParams.PaymentIntentData.builder()
-                        .putMetadata("orderId", order.id)
-                        .putMetadata("userId", userId)
-                        .build()
-                )
-                .addLineItem(
-                    SessionCreateParams.LineItem.builder()
-                        .setQuantity(1L)
-                        .setPriceData(
-                            SessionCreateParams.LineItem.PriceData.builder()
-                                .setCurrency("usd")
-                                .setUnitAmount(amountCents)
-                                .setProductData(
-                                    SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                                        .setName(plan.name.ifBlank { "VALORA Cloud order" })
-                                        .build()
-                                )
-                                .build()
-                        )
-                        .build()
-                )
                 .build()
         )
-        order.stripePaymentId = session.paymentIntent ?: session.id
+        order.stripePaymentId = intent.id
         orderRepository.save(order)
 
         return CheckoutResponse(
             orderId = order.id,
-            clientSecret = null,
-            checkoutUrl = session.url,
+            clientSecret = intent.clientSecret,
             status = "pending_payment",
         )
     }
