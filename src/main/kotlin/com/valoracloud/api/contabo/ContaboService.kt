@@ -279,8 +279,8 @@ class ContaboService(
         rootPassword: Long? = null,
         sshKeys: List<Long>? = null,
         userData: String? = null,
-        // Linux is always root; only Windows callers pass "administrator".
-        defaultUser: String = "root",
+        // Linux is always root; only Windows callers pass administrator (see ProvisioningDefaults).
+        defaultUser: String = com.valoracloud.api.provisioning.ProvisioningDefaults.LINUX_USER,
         license: String? = null,
         addOns: ContaboCreateInstanceAddOns? = null,
     ): ContaboInstance {

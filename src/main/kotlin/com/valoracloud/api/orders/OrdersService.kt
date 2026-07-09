@@ -16,6 +16,7 @@ import com.valoracloud.api.config.OrderRepository
 import com.valoracloud.api.config.PlanRepository
 import com.valoracloud.api.entity.Order
 import com.valoracloud.api.plans.PricingService
+import com.valoracloud.api.provisioning.ProvisioningDefaults
 import com.valoracloud.api.provisioning.processor.ProvisioningProcessor
 import java.math.BigDecimal
 import org.slf4j.LoggerFactory
@@ -63,9 +64,9 @@ class OrdersService(
         else credentials.rootPassword
 
         val imageId = dto.imageId ?: ""
-        val isWindows = imageId.contains("windows", ignoreCase = true)
-        // Business rule: Linux is ALWAYS root; only Windows uses administrator.
-        val sshUser = if (isWindows) "administrator" else "root"
+        // Business rule lives in ProvisioningDefaults: Linux is ALWAYS root.
+        val isWindows = ProvisioningDefaults.isWindows(dto.imageLabel ?: imageId)
+        val sshUser = ProvisioningDefaults.sshUserFor(isWindows)
 
         val order = orderRepository.save(Order(
             userId = userId,

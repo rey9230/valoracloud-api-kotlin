@@ -9,6 +9,7 @@ import com.valoracloud.api.contabo.ContaboService
 import com.valoracloud.api.entity.Server
 import com.valoracloud.api.notifications.service.NotificationsService
 import com.valoracloud.api.provisioning.ContaboProvisioningResolver
+import com.valoracloud.api.provisioning.ProvisioningDefaults
 import com.valoracloud.api.provisioning.service.ProvisioningService
 import com.valoracloud.api.provisioning.service.ProvisioningTxHelper
 import java.security.SecureRandom
@@ -78,7 +79,7 @@ write_files:
 runcmd: []
         """.trimIndent()
 
-        fun buildCloudInit(rootPassword: String, sshUser: String = "root"): String {
+        fun buildCloudInit(rootPassword: String, sshUser: String = ProvisioningDefaults.LINUX_USER): String {
             val chpasswd = "chpasswd:\n  list: |\n    $sshUser:$rootPassword\n  expire: false\n\n"
             return CLOUD_INIT_BASE.replace("#cloud-config\n", "#cloud-config\n$chpasswd")
         }
@@ -175,8 +176,7 @@ runcmd: []
 
             // Resolve Contabo productId based on storage addon.
             // Windows uses the same productId as Linux — only the imageId differs.
-            val isWindowsImage = image.name.contains("windows", ignoreCase = true)
-                    || image.osType?.equals("Windows", ignoreCase = true) == true
+            val isWindowsImage = ProvisioningDefaults.isWindows(image.name, image.osType)
 
             val planEntity = plan ?: throw RuntimeException("Plan not found for order $orderId")
 
@@ -209,9 +209,8 @@ runcmd: []
             }
 
             // defaultUser is determined by OS type, not by order.sshUser.
-            // Contabo allowed values: "admin" | "root" (Linux) — "admin" | "administrator" (Windows)
-            // Business rule: Linux is ALWAYS root; only Windows uses administrator.
-            val sshUser = if (isWindowsImage) "administrator" else "root"
+            // Business rule lives in ProvisioningDefaults: Linux is ALWAYS root.
+            val sshUser = ProvisioningDefaults.sshUserFor(isWindowsImage)
             log.info("defaultUser=$sshUser (windows=$isWindowsImage)")
 
             // Cloud-init
@@ -841,10 +840,8 @@ runcmd: []
                 .joinToString("")
     }
 
-    private fun resolveDefaultUser(os: String): String {
-        val normalized = os.lowercase()
-        return if (normalized.contains("windows")) "administrator" else "root"
-    }
+    private fun resolveDefaultUser(os: String): String =
+        ProvisioningDefaults.sshUserFor(ProvisioningDefaults.isWindows(os))
 
     private fun calculateExpiry(billingCycle: Int): Instant {
         val months = if (billingCycle > 0) billingCycle else 1
