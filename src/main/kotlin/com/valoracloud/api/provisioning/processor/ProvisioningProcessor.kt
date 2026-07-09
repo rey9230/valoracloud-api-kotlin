@@ -1,4 +1,4 @@
-package com.valoracloud.api.provisioning.processor
+﻿package com.valoracloud.api.provisioning.processor
 
 import com.valoracloud.api.billing.service.ProvisionJobData
 import com.valoracloud.api.common.model.OrderStatus
@@ -10,6 +10,7 @@ import com.valoracloud.api.entity.Server
 import com.valoracloud.api.notifications.service.NotificationsService
 import com.valoracloud.api.provisioning.ContaboProvisioningResolver
 import com.valoracloud.api.provisioning.ProvisioningDefaults
+import com.valoracloud.api.provisioning.ValoraBranding
 import com.valoracloud.api.provisioning.service.ProvisioningService
 import com.valoracloud.api.provisioning.service.ProvisioningTxHelper
 import java.security.SecureRandom
@@ -83,6 +84,61 @@ runcmd: []
             val chpasswd = "chpasswd:\n  list: |\n    $sshUser:$rootPassword\n  expire: false\n\n"
             return CLOUD_INIT_BASE.replace("#cloud-config\n", "#cloud-config\n$chpasswd")
         }
+
+        /** Hostname the customer sees — always Valora-branded, never Contabo's vmiXXXX. */
+        fun customerHostname(serverId: String, brandDomain: String): String =
+                "srv-${serverId.take(8)}.$brandDomain"
+
+        fun buildWriteFileCommand(
+                filePath: String,
+                content: String,
+                mode: String,
+                heredocId: String
+        ): String {
+            return """
+cat <<'$heredocId' > $filePath
+$content
+$heredocId
+chmod $mode $filePath
+            """.trimIndent()
+        }
+
+        /**
+         * Shell commands run on every fresh instance — first provision AND reinstall —
+         * to strip ALL Contabo branding (MOTD, issue, SSH banner, profile.d) and install
+         * Valora's. The customer must never see who the upstream provider is.
+         * Guarded by ProvisioningBrandingTest.
+         */
+        fun buildPostProvisionCommands(
+                hostname: String,
+                regionLabel: String,
+                bannerContent: String,
+                motdScript: String,
+        ): List<String> =
+                listOf(
+                        // Write Valora meta file
+                        "mkdir -p /etc/valora && printf 'fqdn=%s\\nregion_label=%s\\n' '$hostname' '$regionLabel' > /etc/valora/meta",
+                        // Write banner
+                        buildWriteFileCommand("/etc/valora/banner.txt", bannerContent, "0644", "VLRN_BANNER"),
+                        // Write MOTD
+                        buildWriteFileCommand("/etc/update-motd.d/00-valora", motdScript, "0755", "VLRN_MOTD"),
+                        // Set hostname
+                        "hostnamectl set-hostname $hostname",
+                        "sed -i 's/127.0.1.1.*/127.0.1.1 $hostname/' /etc/hosts || echo \"127.0.1.1 $hostname\" >> /etc/hosts",
+                        // Wipe provider branding
+                        ": > /etc/motd; : > /etc/issue; : > /etc/issue.net",
+                        "rm -f /etc/profile.d/contabo* /etc/profile.d/cntb* 2>/dev/null || true",
+                        // Disable all MOTD fragments except ours
+                        "for f in /etc/update-motd.d/*; do [ \"\$(basename \$f)\" = \"00-valora\" ] || chmod -x \"\$f\" 2>/dev/null || true; done",
+                        // Disable SSH banner
+                        "sed -i 's/^#*Banner.*/Banner none/' /etc/ssh/sshd_config",
+                        "grep -q '^PrintMotd' /etc/ssh/sshd_config && sed -i 's/^PrintMotd.*/PrintMotd no/' /etc/ssh/sshd_config || echo 'PrintMotd no' >> /etc/ssh/sshd_config",
+                        "systemctl reload sshd 2>/dev/null || systemctl reload ssh 2>/dev/null || true",
+                        // Regenerate MOTD
+                        "run-parts /etc/update-motd.d/ > /run/motd.dynamic 2>/dev/null || true",
+                        // Install guest agent
+                        "apt-get install -y qemu-guest-agent 2>/dev/null || yum install -y qemu-guest-agent 2>/dev/null || true",
+                )
     }
 
     // ─── Entry point ────────────────────────────────────
@@ -107,12 +163,14 @@ runcmd: []
             return
         }
         var ready = false
+        var ipAddress: String? = server.ipAddress
         try {
             for (i in 0 until 30) {
                 Thread.sleep(30_000)
                 try {
                     val inst = contabo.getInstance(server.contaboInstanceId.toLong())
                     if (inst.status == "running") {
+                        inst.ipConfig?.v4?.ip?.let { ipAddress = it }
                         ready = true
                         break
                     }
@@ -126,7 +184,33 @@ runcmd: []
                         .onFailure { e -> log.warn("Could not delete reinstall secret: ${e.message}") }
             }
         }
-        server.status = if (ready) ServerStatus.RUNNING else ServerStatus.ERROR
+
+        // Re-brand: a fresh image ships Contabo's MOTD/hostname — the customer must
+        // only ever see Valora. Same post-provision pass as first-time provisioning.
+        var postProvisionOk = false
+        if (ready && !ipAddress.isNullOrBlank()) {
+            try {
+                runPostProvisioning(
+                        ipAddress!!,
+                        server.sshUser,
+                        newPassword,
+                        serverId,
+                        brandDomain,
+                        server.region,
+                        server.os,
+                )
+                postProvisionOk = true
+            } catch (e: Exception) {
+                log.error("Post-provision after reinstall failed for $serverId: ${e.message}")
+                provisioningService.logEvent(serverId, "post-provision", "error", e.message)
+            }
+        }
+
+        server.status = when {
+            ready && postProvisionOk -> ServerStatus.RUNNING
+            ready -> ServerStatus.NEEDS_PROVISION // running but still Contabo-branded
+            else -> ServerStatus.ERROR
+        }
         server.provisionedAt = if (ready) Instant.now() else server.provisionedAt
         serverRepo.save(server)
         provisioningService.logEvent(
@@ -931,10 +1015,10 @@ runcmd: []
             return
         }
 
-        val hostname = "srv-${serverId.take(8)}.$brandDomain"
+        val hostname = customerHostname(serverId, brandDomain)
         val regionLabel = resolveRegionLabel(region)
-        val bannerContent = buildBannerContent()
-        val motdScript = buildMotdScript()
+        val bannerContent = ValoraBranding.bannerContent()
+        val motdScript = ValoraBranding.motdScript()
 
         // Use JSch for SSH
         val session =
@@ -944,41 +1028,7 @@ runcmd: []
 
         try {
             val channel = session.openChannel("exec")
-            val commands =
-                    listOf(
-                            // Write Valora meta file
-                            "mkdir -p /etc/valora && printf 'fqdn=%s\\nregion_label=%s\\n' '$hostname' '$regionLabel' > /etc/valora/meta",
-                            // Write banner
-                            buildWriteFileCommand(
-                                    "/etc/valora/banner.txt",
-                                    bannerContent,
-                                    "0644",
-                                    "VLRN_BANNER"
-                            ),
-                            // Write MOTD
-                            buildWriteFileCommand(
-                                    "/etc/update-motd.d/00-valora",
-                                    motdScript,
-                                    "0755",
-                                    "VLRN_MOTD"
-                            ),
-                            // Set hostname
-                            "hostnamectl set-hostname $hostname",
-                            "sed -i 's/127.0.1.1.*/127.0.1.1 $hostname/' /etc/hosts || echo \"127.0.1.1 $hostname\" >> /etc/hosts",
-                            // Wipe provider branding
-                            ": > /etc/motd; : > /etc/issue; : > /etc/issue.net",
-                            "rm -f /etc/profile.d/contabo* /etc/profile.d/cntb* 2>/dev/null || true",
-                            // Disable all MOTD fragments except ours
-                            "for f in /etc/update-motd.d/*; do [ \"\$(basename \$f)\" = \"00-valora\" ] || chmod -x \"\$f\" 2>/dev/null || true; done",
-                            // Disable SSH banner
-                            "sed -i 's/^#*Banner.*/Banner none/' /etc/ssh/sshd_config",
-                            "grep -q '^PrintMotd' /etc/ssh/sshd_config && sed -i 's/^PrintMotd.*/PrintMotd no/' /etc/ssh/sshd_config || echo 'PrintMotd no' >> /etc/ssh/sshd_config",
-                            "systemctl reload sshd 2>/dev/null || systemctl reload ssh 2>/dev/null || true",
-                            // Regenerate MOTD
-                            "run-parts /etc/update-motd.d/ > /run/motd.dynamic 2>/dev/null || true",
-                            // Install guest agent
-                            "apt-get install -y qemu-guest-agent 2>/dev/null || yum install -y qemu-guest-agent 2>/dev/null || true",
-                    )
+            val commands = buildPostProvisionCommands(hostname, regionLabel, bannerContent, motdScript)
 
             for (cmd in commands) {
                 val execChannel = session.openChannel("exec") as com.jcraft.jsch.ChannelExec
@@ -1042,19 +1092,6 @@ runcmd: []
         }
     }
 
-    private fun buildWriteFileCommand(
-            filePath: String,
-            content: String,
-            mode: String,
-            heredocId: String
-    ): String {
-        return """
-cat <<'$heredocId' > $filePath
-$content
-$heredocId
-chmod $mode $filePath
-        """.trimIndent()
-    }
 
     private fun resolveRegionLabel(region: String): String {
         return when (region) {
@@ -1069,46 +1106,4 @@ chmod $mode $filePath
         }
     }
 
-    private fun buildMotdScript(): String {
-        val D = "$"
-        return """#!/usr/bin/env bash
-cream=${D}${'\u0027'}\033[38;2;243;236;223m${'\u0027'}; white=${D}${'\u0027'}\033[38;2;232;238;247m${'\u0027'}
-brick=${D}${'\u0027'}\033[38;2;224;99;94m${'\u0027'};  blue=${D}${'\u0027'}\033[38;2;122;162;255m${'\u0027'}
-green=${D}${'\u0027'}\033[38;2;134;239;172m${'\u0027'}; mute=${D}${'\u0027'}\033[38;2;132;144;182m${'\u0027'}
-b=${D}${'\u0027'}\033[1m${'\u0027'}; r=${D}${'\u0027'}\033[0m${'\u0027'}
-rule="  ${D}{mute}╶───────────────────────────────────────────────────────────────╴${D}{r}"
-host=${D}(hostname -s)
-fqdn=${D}([ -f /etc/valora/meta ] && grep -m1 '^fqdn=' /etc/valora/meta | cut -d= -f2 || hostname -f 2>/dev/null || hostname)
-region_label=${D}([ -f /etc/valora/meta ] && grep -m1 '^region_label=' /etc/valora/meta | cut -d= -f2 || echo '—')
-ip4=${D}(hostname -I 2>/dev/null | awk '{print ${D}1}')
-ip6=${D}(ip -6 addr show scope global 2>/dev/null | awk '/inet6/{print ${D}2; exit}')
-os=${D}(. /etc/os-release 2>/dev/null; echo "${D}{PRETTY_NAME:-Linux}")
-cores=${D}(nproc 2>/dev/null || echo "?")
-mem=${D}(free | awk '/Mem:/{printf "%d%%", ${D}3/${D}2*100}')
-disk=${D}(df -h / | awk 'NR==2{print ${D}5" of "${D}2}')
-load=${D}(cut -d" " -f1-3 /proc/loadavg); up=${D}(uptime -p | sed "s/^up //")
-upd=${D}(/usr/lib/update-notifier/apt-check --human-readable 2>/dev/null | head -1)
-printf '\n%s\n\n' "${D}rule"
-while IFS= read -r l; do line=${D}{l/C L O U D/${D}{brick}C L O U D${D}{cream}}; printf '%s%s%s\n' "${D}b${D}cream" "${D}line" "${D}r"; done < /etc/valora/banner.txt
-printf '\n   %sInfrastructure that picks up the phone.%s\n%s\n\n' "${D}mute" "${D}r" "${D}rule"
-printf '   %sHOST   %s %s%s%s · %s\n' "${D}mute" "${D}r" "${D}white" "${D}host" "${D}r" "${D}fqdn"
-printf '   %sREGION %s %-38s %sSTATUS%s %s● operational%s\n' "${D}mute" "${D}r" "${D}region_label" "${D}mute" "${D}r" "${D}green" "${D}r"
-printf '   %sIPv4   %s %s%s%s              %sUPTIME%s %s\n' "${D}mute" "${D}r" "${D}white" "${D}ip4" "${D}r" "${D}mute" "${D}r" "${D}up"
-printf '   %sIPv6   %s %s        %sLOAD  %s %s\n\n%s\n\n' "${D}mute" "${D}r" "${D}{ip6:---}" "${D}mute" "${D}r" "${D}load" "${D}rule"
-printf '   %sSYSTEM %s %s · %s vCPU\n' "${D}mute" "${D}r" "${D}os" "${D}cores"
-printf '   %sDISK   %s %s    %sMEM%s %s\n' "${D}mute" "${D}r" "${D}disk" "${D}mute" "${D}r" "${D}mem"
-printf '   %sUPDATES%s %s%s%s\n\n%s\n\n' "${D}mute" "${D}r" "${D}green" "${D}{upd:-0 updates}" "${D}r" "${D}rule"
-printf '   %spanel  %s %smy.valoracloud.com%s     %sdocs   %s %sdocs.valoracloud.com%s\n' "${D}mute" "${D}r" "${D}blue" "${D}r" "${D}mute" "${D}r" "${D}blue" "${D}r"
-printf '   %sstatus %s %sstatus.valoracloud.com%s %ssupport%s %ssupport@valoracloud.com%s · 24/7\n\n%s\n\n' "${D}mute" "${D}r" "${D}blue" "${D}r" "${D}mute" "${D}r" "${D}blue" "${D}r" "${D}rule"
-"""
-    }
-
-    private fun buildBannerContent(): String {
-        return """██╗   ██╗ █████╗ ██╗      ██████╗ ██████╗  █████╗
-██║   ██║██╔══██╗██║     ██╔═══██╗██╔══██╗██╔══██╗
-██║   ██║███████║██║     ██║   ██║██████╔╝███████║   C L O U D
-╚██╗ ██╔╝██╔══██║██║     ██║   ██║██╔══██╗██╔══██║
- ╚████╔╝ ██║  ██║███████╗╚██████╔╝██║  ██║██║  ██║
-  ╚═══╝  ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝"""
-    }
 }

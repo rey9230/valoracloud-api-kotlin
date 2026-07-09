@@ -11,7 +11,28 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/valoracloud-api
 
 jobs:
+  # Gate: unit tests must pass before anything is built or deployed.
+  # Guards critical invariants (provisioning user rule, white-label branding, pricing).
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run unit tests
+        run: ./gradlew test --no-daemon
+
   build-and-deploy:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
