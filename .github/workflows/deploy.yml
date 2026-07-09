@@ -25,11 +25,15 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # The repo has no gradle-wrapper.jar (same reason the Dockerfile builds with
+      # the gradle image), so provision a Gradle distribution instead of ./gradlew.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
 
       - name: Run unit tests
-        run: ./gradlew test --no-daemon
+        run: gradle test --no-daemon
 
   build-and-deploy:
     needs: test
