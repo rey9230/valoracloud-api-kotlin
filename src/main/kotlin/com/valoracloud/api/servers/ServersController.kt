@@ -67,4 +67,16 @@ class ServersController(
         @CurrentUser userId: String,
         @Valid @RequestBody dto: ChangePasswordDto,
     ) = serversService.changePassword(id, userId, dto.password)
+
+    @GetMapping("/{id}/credentials")
+    fun credentials(
+        @PathVariable id: String,
+        @CurrentUser userId: String,
+    ) = serversService.credentials(id, userId)
+
+    @GetMapping("/{id}/console")
+    fun console(
+        @PathVariable id: String,
+        @CurrentUser userId: String,
+    ) = serversService.console(id, userId)
 }

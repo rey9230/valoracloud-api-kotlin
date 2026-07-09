@@ -212,6 +212,40 @@ class ServersService(
         return mapOf("message" to "Password changed successfully")
     }
 
+    /**
+     * Credentials and console are only exposed once the server is RUNNING — i.e.
+     * fully provisioned AND re-branded. Before that the box may still show the
+     * upstream provider, and the customer must never reach it.
+     */
+    fun credentials(serverId: String, userId: String): Map<String, Any?> {
+        val server = getServerForAction(serverId, userId)
+        requireRunning(server)
+        return mapOf(
+            "id" to server.id,
+            "hostname" to server.hostname,
+            "ipAddress" to server.ipAddress,
+            "sshUser" to server.sshUser,
+            "rootPassword" to
+                if (encryptionKey.isNotBlank()) EncryptionUtil.decrypt(server.rootPassword, encryptionKey)
+                else server.rootPassword,
+        )
+    }
+
+    fun console(serverId: String, userId: String): Map<String, Any?> {
+        val server = getServerForAction(serverId, userId)
+        requireRunning(server)
+        val vnc = contabo.getVncAccess(server.contaboInstanceId.toLong())
+        return mapOf("hostname" to server.hostname, "ipAddress" to server.ipAddress, "vnc" to vnc)
+    }
+
+    private fun requireRunning(server: Server) {
+        if (server.status != ServerStatus.RUNNING) {
+            throw ForbiddenException(
+                "Your server is being prepared. Access details will be available once it is ready."
+            )
+        }
+    }
+
     private fun getServerForAction(serverId: String, userId: String): Server {
         val server = serverRepository.findById(serverId)
             .orElseThrow { NotFoundException("Server", serverId) }
