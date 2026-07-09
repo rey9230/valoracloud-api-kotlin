@@ -33,7 +33,10 @@ class ServersService(
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun findByUser(userId: String, dto: PaginationDto): PaginatedResponse<Map<String, Any?>> {
+        // Dead servers are noise for the customer: a server cancelled a year ago (or a
+        // failed provision they were never charged for) has no place in their dashboard.
         val servers = serverRepository.findByUserIdOrderByCreatedAtDesc(userId)
+            .filter { it.status != ServerStatus.CANCELLED && it.status != ServerStatus.ERROR }
         val page = dto.page; val limit = dto.limit
         val offset = dto.offset
         val paged = servers.drop(offset).take(limit)
@@ -46,6 +49,7 @@ class ServersService(
                 "status" to server.status,
                 "os" to server.os,
                 "region" to server.region,
+                "sshUser" to server.sshUser,
                 "provisionedAt" to server.provisionedAt,
                 "expiresAt" to server.expiresAt,
                 "createdAt" to server.createdAt,
@@ -68,6 +72,7 @@ class ServersService(
             "status" to server.status,
             "os" to server.os,
             "region" to server.region,
+            "sshUser" to server.sshUser,
             "provisionedAt" to server.provisionedAt,
             "expiresAt" to server.expiresAt,
             "createdAt" to server.createdAt,

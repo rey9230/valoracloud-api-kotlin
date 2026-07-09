@@ -219,7 +219,9 @@ chmod $mode $filePath
                 if (ready) "success" else "error",
                 if (ready) "Reinstall completed" else "Instance did not reach running state within 15 min",
         )
-        if (ready) {
+        // The customer only gets credentials once the server is re-branded: a fresh
+        // image still shows the upstream provider until post-provision succeeds.
+        if (ready && postProvisionOk) {
             val user = userRepo.findById(server.userId).orElse(null)
             if (user != null) {
                 runCatching {
@@ -232,6 +234,20 @@ chmod $mode $filePath
                     )
                 }.onFailure { e -> log.error("Failed to send reinstall complete email: ${e.message}") }
             }
+        } else if (ready) {
+            // Branding failed — alert ops to provision manually; no customer email yet.
+            runCatching {
+                notifications.sendAdminProvisionAlert(
+                        context = "reinstall",
+                        serverId = serverId,
+                        hostname = server.hostname,
+                        ip = ipAddress ?: "",
+                        region = server.region,
+                        userId = server.userId,
+                        errorMessage = "Reinstall post-provision (re-branding) failed — server left in NEEDS_PROVISION, customer NOT emailed",
+                        errorStack = "",
+                )
+            }.onFailure { e -> log.error("Admin reinstall alert failed", e) }
         }
     }
 
